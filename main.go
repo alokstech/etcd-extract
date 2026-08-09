@@ -526,16 +526,12 @@ func parseEtcdV3Value(value []byte) (string, map[string]interface{}, error) {
 }
 
 func parseEtcdPath(path string) ParsedKey {
-	// Path format: /kubernetes.io/<resource>/<namespace>/<name>
-	// or: /kubernetes.io/<group>/<resource>/<namespace>/<name>
-
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
 	if len(parts) < 2 {
 		return ParsedKey{FullPath: path}
 	}
 
-	// Skip known prefixes
 	startIdx := 0
 	if parts[0] == "kubernetes.io" || parts[0] == "registry" {
 		startIdx = 1
@@ -545,49 +541,41 @@ func parseEtcdPath(path string) ParsedKey {
 		return ParsedKey{FullPath: path}
 	}
 
-	// Determine resource type
-	resource := ""
-	namespaceIdx := -1
-	nameIdx := -1
-
-	// Simple resources: /kubernetes.io/<resource>/<namespace>/<name>
-	// or /kubernetes.io/<resource>/<name> for cluster-scoped
-	if len(parts) > startIdx {
-		resource = parts[startIdx]
-	}
-
-	// Check if next part looks like a group (contains dots)
-	if startIdx+1 < len(parts) && strings.Contains(parts[startIdx+1], ".") {
-		// This is a group: /kubernetes.io/<group>/<resource>/...
-		if startIdx+2 < len(parts) {
-			resource = parts[startIdx+2]
-		}
-		namespaceIdx = startIdx + 3
-		nameIdx = startIdx + 4
-	} else {
-		// No group: /kubernetes.io/<resource>/...
-		namespaceIdx = startIdx + 1
-		nameIdx = startIdx + 2
-	}
-
+	remaining := parts[startIdx:]
 	result := ParsedKey{
-		Resource: resource,
+		Resource: remaining[0],
 		FullPath: path,
 	}
 
-	// Determine if cluster-scoped
-	if clusterScopedResources[resource] {
-		// Cluster-scoped: name comes directly after resource
-		if namespaceIdx < len(parts) {
-			result.Name = parts[namespaceIdx]
+	if strings.Contains(remaining[0], ".") {
+		// API group path: <group>/<resource>/[<namespace>/]<name>
+		// Use segment count: 3 = cluster-scoped, 4+ = namespaced
+		switch len(remaining) {
+		case 3:
+			result.Name = remaining[2]
+		case 4:
+			result.Namespace = remaining[2]
+			result.Name = remaining[3]
+		default:
+			if len(remaining) >= 5 {
+				result.Namespace = remaining[2]
+				result.Name = remaining[3]
+			}
 		}
 	} else {
-		// Namespaced resource
-		if namespaceIdx < len(parts) {
-			result.Namespace = parts[namespaceIdx]
-		}
-		if nameIdx < len(parts) {
-			result.Name = parts[nameIdx]
+		// Core resource path: <resource>/[<namespace>/]<name>
+		// Use segment count: 2 = cluster-scoped, 3+ = namespaced
+		switch len(remaining) {
+		case 2:
+			result.Name = remaining[1]
+		case 3:
+			result.Namespace = remaining[1]
+			result.Name = remaining[2]
+		default:
+			if len(remaining) >= 4 {
+				result.Namespace = remaining[1]
+				result.Name = remaining[2]
+			}
 		}
 	}
 
