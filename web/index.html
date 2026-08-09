@@ -9,9 +9,9 @@
 <body>
     <nav class="topbar">
         <div class="brand">etcd-extract</div>
-        <div class="db-selector">
-            <input type="text" id="db-path" placeholder="Enter path to etcd database file...">
-            <button id="load-btn">Load</button>
+        <div class="db-info" id="db-info">
+            <span id="db-filename">No database loaded</span>
+            <button id="change-db-btn" class="hidden">Change</button>
         </div>
         <div class="db-status" id="db-status"></div>
     </nav>
@@ -39,9 +39,27 @@
         </aside>
 
         <main class="content">
-            <div id="welcome" class="welcome-msg">
-                <h2>Welcome to etcd-extract</h2>
-                <p>Load an etcd database file to browse and extract Kubernetes resources</p>
+            <div id="upload-view" class="upload-view">
+                <input type="file" id="file-input" hidden>
+                <div class="upload-area" id="upload-area">
+                    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <h2>Load etcd Database</h2>
+                    <p><strong>Click to browse</strong> or drag and drop your database file here</p>
+                    <span class="upload-hint">Supports etcd v3 bbolt database files</span>
+                </div>
+                <div id="upload-progress" class="upload-progress hidden">
+                    <div class="spinner"></div>
+                    <span>Uploading and scanning database...</span>
+                </div>
+            </div>
+
+            <div id="welcome" class="welcome-msg hidden">
+                <h2>Browse Resources</h2>
+                <p>Select a resource type from the sidebar to explore</p>
             </div>
 
             <div id="object-list" class="hidden">

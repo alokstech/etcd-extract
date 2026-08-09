@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -749,6 +751,57 @@ func (ws *webServer) handleLoad(w http.ResponseWriter, r *http.Request) {
 	ws.jsonResponse(w, map[string]interface{}{"success": true, "path": req.Path})
 }
 
+func (ws *webServer) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.ParseMultipartForm(512 << 20) // 512MB max
+	file, header, err := r.FormFile("dbfile")
+	if err != nil {
+		http.Error(w, "Failed to read uploaded file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	tmpDir, err := os.MkdirTemp("", "etcd-extract-*")
+	if err != nil {
+		http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
+		return
+	}
+
+	tmpPath := filepath.Join(tmpDir, header.Filename)
+	dst, err := os.Create(tmpPath)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := io.Copy(dst, file); err != nil {
+		dst.Close()
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+	dst.Close()
+
+	db, err := bolt.Open(tmpPath, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Invalid etcd database: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	db.Close()
+
+	ws.mu.Lock()
+	ws.dbPath = tmpPath
+	ws.mu.Unlock()
+
+	ws.jsonResponse(w, map[string]interface{}{"success": true, "filename": header.Filename, "path": tmpPath})
+}
+
 func (ws *webServer) withDB(w http.ResponseWriter, fn func(dbPath string)) {
 	ws.mu.RLock()
 	dbPath := ws.dbPath
@@ -961,6 +1014,7 @@ func startWebServer(dbPath, listenPort string) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/status", ws.handleStatus)
 	mux.HandleFunc("/api/load", ws.handleLoad)
+	mux.HandleFunc("/api/upload", ws.handleUpload)
 	mux.HandleFunc("/api/namespaces", ws.handleNamespaces)
 	mux.HandleFunc("/api/resources", ws.handleResources)
 	mux.HandleFunc("/api/objects", ws.handleObjects)

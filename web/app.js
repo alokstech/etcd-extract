@@ -1,5 +1,4 @@
 let state = {
-    dbPath: '',
     namespaces: [],
     allResources: [],
     selectedNamespace: '',
@@ -25,33 +24,77 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const status = await api('/status');
         if (status.loaded) {
-            $('db-path').value = status.path;
-            state.dbPath = status.path;
-            showStatus('Database loaded: ' + status.path);
-            await loadSidebar();
+            onDBLoaded(status.path.split('/').pop());
         }
     } catch (e) {
-        // No pre-loaded db, that's fine
+        // No pre-loaded db
     }
 });
 
-$('load-btn').addEventListener('click', loadDB);
-$('db-path').addEventListener('keydown', e => { if (e.key === 'Enter') loadDB(); });
+// File upload handling
+const uploadArea = $('upload-area');
+const fileInput = $('file-input');
 
-async function loadDB() {
-    const path = $('db-path').value.trim();
-    if (!path) return;
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', e => {
+    e.preventDefault();
+    uploadArea.classList.add('drag-over');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('drag-over');
+});
+
+uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('drag-over');
+    if (e.dataTransfer.files.length > 0) {
+        uploadFile(e.dataTransfer.files[0]);
+    }
+});
+
+fileInput.addEventListener('change', e => {
+    if (e.target.files.length > 0) {
+        uploadFile(e.target.files[0]);
+    }
+});
+
+$('change-db-btn').addEventListener('click', () => {
+    showView('upload-view');
+    $('sidebar-placeholder').classList.remove('hidden');
+    $('sidebar-content').classList.add('hidden');
+    $('db-filename').textContent = 'No database loaded';
+    $('change-db-btn').classList.add('hidden');
+    $('db-status').textContent = '';
+    fileInput.value = '';
+});
+
+async function uploadFile(file) {
+    $('upload-progress').classList.remove('hidden');
+    uploadArea.classList.add('hidden');
+
+    const formData = new FormData();
+    formData.append('dbfile', file);
 
     try {
-        showStatus('Loading...');
-        await api('/load', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({path}),
-        });
-        state.dbPath = path;
-        showStatus('Loaded: ' + path);
+        const data = await api('/upload', { method: 'POST', body: formData });
+        onDBLoaded(data.filename);
+    } catch (e) {
+        showStatus(e.message, true);
+        $('upload-progress').classList.add('hidden');
+        uploadArea.classList.remove('hidden');
+    }
+}
+
+async function onDBLoaded(filename) {
+    $('db-filename').textContent = filename;
+    $('change-db-btn').classList.remove('hidden');
+    showStatus('Database loaded');
+
+    try {
         await loadSidebar();
+        showView('welcome');
     } catch (e) {
         showStatus(e.message, true);
     }
@@ -66,7 +109,6 @@ async function loadSidebar() {
     state.namespaces = nsData.namespaces || [];
     state.allResources = resData.resources || [];
 
-    // Populate namespace dropdown
     const sel = $('namespace-select');
     sel.innerHTML = '<option value="">All Namespaces</option>';
     state.namespaces.forEach(ns => {
@@ -80,8 +122,6 @@ async function loadSidebar() {
     $('sidebar-placeholder').classList.add('hidden');
     $('sidebar-content').classList.remove('hidden');
 
-    // Reset main content
-    showView('welcome');
     state.selectedResource = '';
     state.selectedNamespace = '';
 }
@@ -128,10 +168,8 @@ function makeResourceItem(r) {
 }
 
 async function selectResource(resource, element) {
-    // Update active state in sidebar
     document.querySelectorAll('.resource-list li').forEach(li => li.classList.remove('active'));
     element.classList.add('active');
-
     state.selectedResource = resource;
 
     try {
@@ -166,13 +204,6 @@ function renderObjectList() {
 
 async function loadObject(obj) {
     try {
-        let url = '/object?resource=' + encodeURIComponent(obj.namespace ? state.selectedResource : state.selectedResource);
-        url += '&name=' + encodeURIComponent(obj.name);
-        if (obj.namespace) {
-            url += '&namespace=' + encodeURIComponent(obj.namespace);
-        }
-        url += '&resource=' + encodeURIComponent(state.selectedResource);
-
         const data = await api('/object?resource=' + encodeURIComponent(state.selectedResource) +
             '&name=' + encodeURIComponent(obj.name) +
             (obj.namespace ? '&namespace=' + encodeURIComponent(obj.namespace) : ''));
@@ -188,18 +219,14 @@ async function loadObject(obj) {
 
 function renderObjectDetail() {
     if (!state.currentObject) return;
-
     const obj = state.currentObject;
     const label = obj.namespace ? obj.resource + '/' + obj.namespace + '/' + obj.name : obj.resource + '/' + obj.name;
     $('detail-title').textContent = label;
     $('object-content').textContent = state.currentFormat === 'yaml' ? obj.yaml : obj.json;
-
     showView('object-detail');
 }
 
-$('back-btn').addEventListener('click', () => {
-    showView('object-list');
-});
+$('back-btn').addEventListener('click', () => showView('object-list'));
 
 $('format-select').addEventListener('change', (e) => {
     state.currentFormat = e.target.value;
@@ -216,7 +243,6 @@ $('download-btn').addEventListener('click', () => {
     const ext = state.currentFormat;
     const content = ext === 'yaml' ? obj.yaml : obj.json;
     const filename = (obj.namespace ? obj.namespace + '-' : '') + obj.name + '.' + ext;
-
     const blob = new Blob([content], {type: 'text/plain'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -226,6 +252,7 @@ $('download-btn').addEventListener('click', () => {
 });
 
 function showView(view) {
+    $('upload-view').classList.add('hidden');
     $('welcome').classList.add('hidden');
     $('object-list').classList.add('hidden');
     $('object-detail').classList.add('hidden');

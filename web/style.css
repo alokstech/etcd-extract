@@ -47,37 +47,29 @@ body {
     white-space: nowrap;
 }
 
-.db-selector {
+.db-info {
     display: flex;
+    align-items: center;
+    gap: 0.75rem;
     flex: 1;
-    max-width: 600px;
-    gap: 0.5rem;
 }
 
-.db-selector input {
-    flex: 1;
-    padding: 0.4rem 0.75rem;
+#db-filename {
+    font-size: 0.9rem;
+    color: #a0aec0;
+}
+
+#change-db-btn {
+    padding: 0.3rem 0.75rem;
+    background: #2d3748;
+    color: #e2e8f0;
     border: 1px solid #4a5568;
     border-radius: 4px;
-    background: #2d3748;
-    color: white;
-    font-size: 0.9rem;
-}
-
-.db-selector input::placeholder { color: #718096; }
-
-.db-selector button {
-    padding: 0.4rem 1rem;
-    background: var(--blue);
-    color: white;
-    border: none;
-    border-radius: 4px;
     cursor: pointer;
-    font-weight: 500;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
 }
 
-.db-selector button:hover { background: var(--blue-dark); }
+#change-db-btn:hover { background: #4a5568; }
 
 .db-status {
     font-size: 0.85rem;
@@ -86,6 +78,74 @@ body {
 }
 
 .db-status.error { color: var(--danger); }
+
+/* Upload Area */
+.upload-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.upload-area {
+    border: 2px dashed #cbd5e0;
+    border-radius: 12px;
+    padding: 3rem 4rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--card-bg);
+    max-width: 500px;
+    width: 100%;
+}
+
+.upload-area:hover,
+.upload-area.drag-over {
+    border-color: var(--blue);
+    background: #ebf4ff;
+}
+
+.upload-area svg {
+    color: var(--blue);
+    margin-bottom: 1rem;
+}
+
+.upload-area h2 {
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.upload-area p {
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+}
+
+.upload-hint {
+    font-size: 0.8rem;
+    color: #a0aec0;
+}
+
+.upload-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Layout */
 .layout {
