@@ -1,0 +1,2 @@
+boltdb @ git+https://github.com/qingyunha/boltdb.git
+PyYAML>=6.0
