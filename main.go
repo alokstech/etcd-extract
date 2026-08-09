@@ -1,14 +1,19 @@
 package main
 
 import (
+	"embed"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
+	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
@@ -28,7 +33,12 @@ var (
 	outputShort   = flag.String("o", "", "Output format (short form)")
 	list          = flag.Bool("list", false, "List available resources in the database")
 	listShort     = flag.Bool("l", false, "List available resources (short form)")
+	serve         = flag.Bool("serve", false, "Start web GUI server")
+	port          = flag.String("port", "8080", "Port for web server (used with --serve)")
 )
+
+//go:embed web
+var webFS embed.FS
 
 // ClusterScopedResources defines resources that don't have a namespace
 var clusterScopedResources = map[string]bool{
@@ -691,6 +701,282 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 	return nil
 }
 
+// Web GUI server
+
+type webServer struct {
+	dbPath string
+	mu     sync.RWMutex
+}
+
+func (ws *webServer) jsonResponse(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (ws *webServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+	ws.jsonResponse(w, map[string]interface{}{"loaded": ws.dbPath != "", "path": ws.dbPath})
+}
+
+func (ws *webServer) handleLoad(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		http.Error(w, "File not found: "+req.Path, http.StatusBadRequest)
+		return
+	}
+	db, err := bolt.Open(req.Path, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	if err != nil {
+		http.Error(w, "Invalid etcd database: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	db.Close()
+
+	ws.mu.Lock()
+	ws.dbPath = req.Path
+	ws.mu.Unlock()
+
+	ws.jsonResponse(w, map[string]interface{}{"success": true, "path": req.Path})
+}
+
+func (ws *webServer) withDB(w http.ResponseWriter, fn func(dbPath string)) {
+	ws.mu.RLock()
+	dbPath := ws.dbPath
+	ws.mu.RUnlock()
+	if dbPath == "" {
+		http.Error(w, "No database loaded", http.StatusBadRequest)
+		return
+	}
+	fn(dbPath)
+}
+
+func (ws *webServer) handleNamespaces(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		nsSet := make(map[string]bool)
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Namespace != "" {
+					nsSet[parsed.Namespace] = true
+				}
+				return nil
+			})
+		})
+
+		var namespaces []string
+		for ns := range nsSet {
+			namespaces = append(namespaces, ns)
+		}
+		sort.Strings(namespaces)
+		ws.jsonResponse(w, map[string]interface{}{"namespaces": namespaces})
+	})
+}
+
+func (ws *webServer) handleResources(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		nsFilter := r.URL.Query().Get("namespace")
+
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		type resSummary struct {
+			Count      int  `json:"count"`
+			Namespaced bool `json:"namespaced"`
+		}
+		resMap := make(map[string]*resSummary)
+
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Resource == "" {
+					return nil
+				}
+				if nsFilter != "" && parsed.Namespace != nsFilter {
+					return nil
+				}
+				if _, exists := resMap[parsed.Resource]; !exists {
+					resMap[parsed.Resource] = &resSummary{}
+				}
+				resMap[parsed.Resource].Count++
+				if parsed.Namespace != "" {
+					resMap[parsed.Resource].Namespaced = true
+				}
+				return nil
+			})
+		})
+
+		type resInfo struct {
+			Name       string `json:"name"`
+			Count      int    `json:"count"`
+			Namespaced bool   `json:"namespaced"`
+		}
+		var resources []resInfo
+		for n, s := range resMap {
+			resources = append(resources, resInfo{Name: n, Count: s.Count, Namespaced: s.Namespaced})
+		}
+		sort.Slice(resources, func(i, j int) bool { return resources[i].Name < resources[j].Name })
+		ws.jsonResponse(w, map[string]interface{}{"resources": resources})
+	})
+}
+
+func (ws *webServer) handleObjects(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		resourceFilter := r.URL.Query().Get("resource")
+		nsFilter := r.URL.Query().Get("namespace")
+		if resourceFilter == "" {
+			http.Error(w, "resource parameter required", http.StatusBadRequest)
+			return
+		}
+
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		type objEntry struct {
+			Key       string `json:"key"`
+			Namespace string `json:"namespace"`
+			Name      string `json:"name"`
+		}
+		var objects []objEntry
+
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Resource != resourceFilter {
+					return nil
+				}
+				if nsFilter != "" && parsed.Namespace != nsFilter {
+					return nil
+				}
+				objects = append(objects, objEntry{Key: parsed.FullPath, Namespace: parsed.Namespace, Name: parsed.Name})
+				return nil
+			})
+		})
+
+		sort.Slice(objects, func(i, j int) bool {
+			if objects[i].Namespace != objects[j].Namespace {
+				return objects[i].Namespace < objects[j].Namespace
+			}
+			return objects[i].Name < objects[j].Name
+		})
+		ws.jsonResponse(w, map[string]interface{}{"objects": objects})
+	})
+}
+
+func (ws *webServer) handleObject(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		resourceFilter := r.URL.Query().Get("resource")
+		nsFilter := r.URL.Query().Get("namespace")
+		nameFilter := r.URL.Query().Get("name")
+		if resourceFilter == "" || nameFilter == "" {
+			http.Error(w, "resource and name parameters required", http.StatusBadRequest)
+			return
+		}
+
+		results, err := extractObjects(dbPath, resourceFilter, nsFilter, nameFilter, nsFilter == "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(results) == 0 {
+			http.Error(w, "Object not found", http.StatusNotFound)
+			return
+		}
+
+		obj := results[0]
+
+		var yamlBuf strings.Builder
+		fmt.Fprintf(&yamlBuf, "# Key: %s\n", obj.Key)
+		if obj.Namespace != "" {
+			fmt.Fprintf(&yamlBuf, "# Namespace: %s\n", obj.Namespace)
+		}
+		fmt.Fprintf(&yamlBuf, "# Resource: %s\n# Name: %s\n---\n", obj.Resource, obj.Name)
+		yamlData, _ := yaml.Marshal(obj.Object)
+		yamlBuf.Write(yamlData)
+
+		jsonData, _ := json.MarshalIndent(obj.Object, "", "  ")
+
+		ws.jsonResponse(w, map[string]interface{}{
+			"key":       obj.Key,
+			"resource":  obj.Resource,
+			"namespace": obj.Namespace,
+			"name":      obj.Name,
+			"yaml":      yamlBuf.String(),
+			"json":      string(jsonData),
+		})
+	})
+}
+
+func startWebServer(dbPath, listenPort string) {
+	ws := &webServer{dbPath: dbPath}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", ws.handleStatus)
+	mux.HandleFunc("/api/load", ws.handleLoad)
+	mux.HandleFunc("/api/namespaces", ws.handleNamespaces)
+	mux.HandleFunc("/api/resources", ws.handleResources)
+	mux.HandleFunc("/api/objects", ws.handleObjects)
+	mux.HandleFunc("/api/object", ws.handleObject)
+
+	subFS, _ := fs.Sub(webFS, "web")
+	mux.Handle("/", http.FileServer(http.FS(subFS)))
+
+	addr := ":" + listenPort
+	fmt.Fprintf(os.Stderr, "Starting etcd-extract web GUI at http://localhost%s\n", addr)
+	if dbPath != "" {
+		fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
+	}
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
 func reorderArgs() {
 	var flags, positional []string
 	args := os.Args[1:]
@@ -758,7 +1044,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  # Extract all namespaces (cluster-scoped resource)\n")
 		fmt.Fprintf(os.Stderr, "  %s --resource namespaces db.etcd\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  # Extract as JSON instead of YAML\n")
-		fmt.Fprintf(os.Stderr, "  %s --resource configmaps --ns default --output json db.etcd\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --resource configmaps --ns default --output json db.etcd\n\n", os.Args[0])
+
+		fmt.Fprintf(os.Stderr, "  Web GUI:\n\n")
+		fmt.Fprintf(os.Stderr, "  # Start web GUI with a database\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve db.etcd\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Start web GUI on a custom port\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve --port 9090 db.etcd\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Start web GUI (load database via UI)\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve\n", os.Args[0])
 	}
 
 	reorderArgs()
@@ -782,6 +1076,16 @@ func main() {
 	}
 	if *allNsShort {
 		*allNamespaces = true
+	}
+
+	// Handle serve mode
+	if *serve {
+		initialDB := ""
+		if flag.NArg() >= 1 {
+			initialDB = flag.Arg(0)
+		}
+		startWebServer(initialDB, *port)
+		return
 	}
 
 	// Get database file path

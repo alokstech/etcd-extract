@@ -1,378 +1,247 @@
-// Global state
-let currentSessionId = null;
-let currentResources = [];
-let currentResults = [];
+let state = {
+    dbPath: '',
+    namespaces: [],
+    allResources: [],
+    selectedNamespace: '',
+    selectedResource: '',
+    objects: [],
+    currentObject: null,
+    currentFormat: 'yaml',
+};
 
-// DOM Elements
-const uploadArea = document.getElementById('upload-area');
-const fileInput = document.getElementById('file-input');
-const uploadStatus = document.getElementById('upload-status');
-const resourcesSection = document.getElementById('resources-section');
-const resourcesLoading = document.getElementById('resources-loading');
-const resourcesList = document.getElementById('resources-list');
-const extractSection = document.getElementById('extract-section');
-const extractForm = document.getElementById('extract-form');
-const resourceSelect = document.getElementById('resource-select');
-const namespaceInput = document.getElementById('namespace-input');
-const nameInput = document.getElementById('name-input');
-const allNamespacesCheck = document.getElementById('all-namespaces-check');
-const formatSelect = document.getElementById('format-select');
-const downloadBtn = document.getElementById('download-btn');
-const resultsSection = document.getElementById('results-section');
-const resultsSummary = document.getElementById('results-summary');
-const resultsContent = document.getElementById('results-content');
+const $ = id => document.getElementById(id);
 
-// Upload handlers
-uploadArea.addEventListener('click', () => fileInput.click());
+async function api(path, opts) {
+    const res = await fetch('/api' + path, opts);
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+    }
+    return res.json();
+}
 
-uploadArea.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadArea.classList.add('drag-over');
-});
-
-uploadArea.addEventListener('dragleave', () => {
-    uploadArea.classList.remove('drag-over');
-});
-
-uploadArea.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadArea.classList.remove('drag-over');
-
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        handleFileUpload(files[0]);
+// Init
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const status = await api('/status');
+        if (status.loaded) {
+            $('db-path').value = status.path;
+            state.dbPath = status.path;
+            showStatus('Database loaded: ' + status.path);
+            await loadSidebar();
+        }
+    } catch (e) {
+        // No pre-loaded db, that's fine
     }
 });
 
-fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        handleFileUpload(e.target.files[0]);
-    }
-});
+$('load-btn').addEventListener('click', loadDB);
+$('db-path').addEventListener('keydown', e => { if (e.key === 'Enter') loadDB(); });
 
-// File upload function
-async function handleFileUpload(file) {
-    const formData = new FormData();
-    formData.append('dbfile', file);
-
-    showStatus('Uploading file...', 'info');
+async function loadDB() {
+    const path = $('db-path').value.trim();
+    if (!path) return;
 
     try {
-        const response = await fetch('/api/upload', {
+        showStatus('Loading...');
+        await api('/load', {
             method: 'POST',
-            body: formData
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path}),
         });
-
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(error || 'Upload failed');
-        }
-
-        const data = await response.json();
-        currentSessionId = data.sessionId;
-
-        showStatus(`File uploaded successfully: ${data.filename}`, 'success');
-
-        // Load resources
-        await loadResources();
-
-    } catch (error) {
-        showStatus(`Error: ${error.message}`, 'error');
+        state.dbPath = path;
+        showStatus('Loaded: ' + path);
+        await loadSidebar();
+    } catch (e) {
+        showStatus(e.message, true);
     }
 }
 
-// Load resources from uploaded database
-async function loadResources() {
-    resourcesSection.classList.remove('hidden');
-    resourcesLoading.classList.remove('hidden');
-    resourcesList.classList.add('hidden');
+async function loadSidebar() {
+    const [nsData, resData] = await Promise.all([
+        api('/namespaces'),
+        api('/resources'),
+    ]);
 
-    try {
-        const response = await fetch(`/api/resources?sessionId=${currentSessionId}`);
+    state.namespaces = nsData.namespaces || [];
+    state.allResources = resData.resources || [];
 
-        if (!response.ok) {
-            throw new Error('Failed to load resources');
-        }
-
-        const data = await response.json();
-        currentResources = data.resources;
-
-        displayResources(data.resources);
-
-        resourcesLoading.classList.add('hidden');
-        resourcesList.classList.remove('hidden');
-        extractSection.classList.remove('hidden');
-
-    } catch (error) {
-        showStatus(`Error loading resources: ${error.message}`, 'error');
-        resourcesLoading.textContent = 'Failed to load resources';
-    }
-}
-
-// Display resources as cards
-function displayResources(resources) {
-    // Sort resources by name
-    resources.sort((a, b) => a.name.localeCompare(b.name));
-
-    const grid = document.createElement('div');
-    grid.className = 'resources-grid';
-
-    resources.forEach(resource => {
-        const card = document.createElement('div');
-        card.className = 'resource-card';
-
-        const badgeClass = resource.namespaced ? 'badge-namespaced' : 'badge-cluster';
-
-        card.innerHTML = `
-            <h3>${resource.name}</h3>
-            <div class="resource-meta">
-                <span class="resource-badge ${badgeClass}">${resource.type}</span>
-                <span>${resource.count} objects</span>
-            </div>
-        `;
-
-        card.addEventListener('click', () => {
-            // Remove previous selection
-            document.querySelectorAll('.resource-card').forEach(c =>
-                c.classList.remove('selected')
-            );
-
-            // Select this card
-            card.classList.add('selected');
-
-            // Update form
-            resourceSelect.value = resource.name;
-
-            // Enable/disable namespace input based on resource type
-            if (resource.namespaced) {
-                namespaceInput.disabled = false;
-                allNamespacesCheck.disabled = false;
-            } else {
-                namespaceInput.disabled = true;
-                namespaceInput.value = '';
-                allNamespacesCheck.disabled = true;
-                allNamespacesCheck.checked = false;
-            }
-        });
-
-        grid.appendChild(card);
+    // Populate namespace dropdown
+    const sel = $('namespace-select');
+    sel.innerHTML = '<option value="">All Namespaces</option>';
+    state.namespaces.forEach(ns => {
+        const opt = document.createElement('option');
+        opt.value = ns;
+        opt.textContent = ns;
+        sel.appendChild(opt);
     });
 
-    // Populate select dropdown
-    resourceSelect.innerHTML = '<option value="">-- Select a resource --</option>';
-    resources.forEach(resource => {
-        const option = document.createElement('option');
-        option.value = resource.name;
-        option.textContent = `${resource.name} (${resource.count})`;
-        resourceSelect.appendChild(option);
-    });
+    renderSidebar(state.allResources);
+    $('sidebar-placeholder').classList.add('hidden');
+    $('sidebar-content').classList.remove('hidden');
 
-    resourcesList.innerHTML = '';
-    resourcesList.appendChild(grid);
+    // Reset main content
+    showView('welcome');
+    state.selectedResource = '';
+    state.selectedNamespace = '';
 }
 
-// Resource select change handler
-resourceSelect.addEventListener('change', (e) => {
-    const selectedResource = currentResources.find(r => r.name === e.target.value);
-
-    if (selectedResource) {
-        if (selectedResource.namespaced) {
-            namespaceInput.disabled = false;
-            allNamespacesCheck.disabled = false;
-        } else {
-            namespaceInput.disabled = true;
-            namespaceInput.value = '';
-            allNamespacesCheck.disabled = true;
-            allNamespacesCheck.checked = false;
-        }
-    }
-});
-
-// Extract form submission
-extractForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const resource = resourceSelect.value;
-    if (!resource) {
-        alert('Please select a resource type');
-        return;
-    }
-
-    const extractRequest = {
-        sessionId: currentSessionId,
-        resource: resource,
-        namespace: namespaceInput.value,
-        name: nameInput.value,
-        allNamespaces: allNamespacesCheck.checked,
-        format: formatSelect.value
-    };
+$('namespace-select').addEventListener('change', async (e) => {
+    state.selectedNamespace = e.target.value;
+    state.selectedResource = '';
+    showView('welcome');
 
     try {
-        const response = await fetch('/api/extract', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(extractRequest)
-        });
-
-        if (!response.ok) {
-            throw new Error('Extraction failed');
+        if (state.selectedNamespace) {
+            const data = await api('/resources?namespace=' + encodeURIComponent(state.selectedNamespace));
+            renderSidebar(data.resources || [], true);
+        } else {
+            renderSidebar(state.allResources);
         }
-
-        const data = await response.json();
-        currentResults = data.objects;
-
-        displayResults(data.objects, extractRequest.format);
-        downloadBtn.classList.remove('hidden');
-
-    } catch (error) {
-        showStatus(`Error extracting objects: ${error.message}`, 'error');
+    } catch (e) {
+        showStatus(e.message, true);
     }
 });
 
-// Display extraction results
-function displayResults(objects, format) {
-    resultsSection.classList.remove('hidden');
+function renderSidebar(resources, namespacedOnly) {
+    const clusterList = $('cluster-resources');
+    const namespacedList = $('namespaced-resources');
 
-    if (objects.length === 0) {
-        resultsSummary.innerHTML = '<strong>No objects found matching the criteria</strong>';
-        resultsContent.innerHTML = '';
-        return;
+    if (!namespacedOnly) {
+        clusterList.innerHTML = '';
+        resources.filter(r => !r.namespaced).sort((a, b) => a.name.localeCompare(b.name)).forEach(r => {
+            clusterList.appendChild(makeResourceItem(r));
+        });
     }
 
-    resultsSummary.innerHTML = `<strong>Found ${objects.length} object(s)</strong>`;
-
-    resultsContent.innerHTML = '';
-
-    objects.forEach((obj, index) => {
-        const item = document.createElement('div');
-        item.className = 'result-item';
-
-        let content = '';
-        if (format === 'yaml') {
-            // Format YAML content
-            content = `# Key: ${obj.key}\n`;
-            if (obj.namespace) {
-                content += `# Namespace: ${obj.namespace}\n`;
-            }
-            content += `# Resource: ${obj.resource}\n`;
-            content += `# Name: ${obj.name}\n`;
-            content += `---\n`;
-            content += formatYAML(obj.object);
-        } else {
-            content = JSON.stringify(obj.object, null, 2);
-        }
-
-        const title = obj.namespace
-            ? `${obj.resource}/${obj.namespace}/${obj.name}`
-            : `${obj.resource}/${obj.name}`;
-
-        item.innerHTML = `
-            <div class="result-header">
-                <span class="result-title">${title}</span>
-                <span class="result-meta">${format.toUpperCase()}</span>
-            </div>
-            <div class="result-content">
-                <pre>${escapeHtml(content)}</pre>
-            </div>
-        `;
-
-        resultsContent.appendChild(item);
+    namespacedList.innerHTML = '';
+    resources.filter(r => r.namespaced).sort((a, b) => a.name.localeCompare(b.name)).forEach(r => {
+        namespacedList.appendChild(makeResourceItem(r));
     });
-
-    // Scroll to results
-    resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
-// Download button handler
-downloadBtn.addEventListener('click', async () => {
-    const extractRequest = {
-        sessionId: currentSessionId,
-        resource: resourceSelect.value,
-        namespace: namespaceInput.value,
-        name: nameInput.value,
-        allNamespaces: allNamespacesCheck.checked,
-        format: formatSelect.value
-    };
+function makeResourceItem(r) {
+    const li = document.createElement('li');
+    li.innerHTML = `<span>${r.name}</span><span class="count">${r.count}</span>`;
+    li.addEventListener('click', () => selectResource(r.name, li));
+    return li;
+}
+
+async function selectResource(resource, element) {
+    // Update active state in sidebar
+    document.querySelectorAll('.resource-list li').forEach(li => li.classList.remove('active'));
+    element.classList.add('active');
+
+    state.selectedResource = resource;
 
     try {
-        const response = await fetch('/api/download', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(extractRequest)
-        });
-
-        if (!response.ok) {
-            throw new Error('Download failed');
+        let url = '/objects?resource=' + encodeURIComponent(resource);
+        if (state.selectedNamespace) {
+            url += '&namespace=' + encodeURIComponent(state.selectedNamespace);
         }
-
-        // Trigger download
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `etcd-extract-${Date.now()}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        showStatus('Download started', 'success');
-
-    } catch (error) {
-        showStatus(`Error downloading: ${error.message}`, 'error');
+        const data = await api(url);
+        state.objects = data.objects || [];
+        renderObjectList();
+    } catch (e) {
+        showStatus(e.message, true);
     }
+}
+
+function renderObjectList() {
+    $('list-title').textContent = state.selectedResource;
+    $('list-count').textContent = state.objects.length + ' object(s)';
+
+    const tbody = $('objects-tbody');
+    tbody.innerHTML = '';
+
+    state.objects.forEach(obj => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${obj.namespace || '-'}</td><td>${obj.name}</td>`;
+        tr.addEventListener('click', () => loadObject(obj));
+        tbody.appendChild(tr);
+    });
+
+    showView('object-list');
+}
+
+async function loadObject(obj) {
+    try {
+        let url = '/object?resource=' + encodeURIComponent(obj.namespace ? state.selectedResource : state.selectedResource);
+        url += '&name=' + encodeURIComponent(obj.name);
+        if (obj.namespace) {
+            url += '&namespace=' + encodeURIComponent(obj.namespace);
+        }
+        url += '&resource=' + encodeURIComponent(state.selectedResource);
+
+        const data = await api('/object?resource=' + encodeURIComponent(state.selectedResource) +
+            '&name=' + encodeURIComponent(obj.name) +
+            (obj.namespace ? '&namespace=' + encodeURIComponent(obj.namespace) : ''));
+
+        state.currentObject = data;
+        state.currentFormat = 'yaml';
+        $('format-select').value = 'yaml';
+        renderObjectDetail();
+    } catch (e) {
+        showStatus(e.message, true);
+    }
+}
+
+function renderObjectDetail() {
+    if (!state.currentObject) return;
+
+    const obj = state.currentObject;
+    const label = obj.namespace ? obj.resource + '/' + obj.namespace + '/' + obj.name : obj.resource + '/' + obj.name;
+    $('detail-title').textContent = label;
+    $('object-content').textContent = state.currentFormat === 'yaml' ? obj.yaml : obj.json;
+
+    showView('object-detail');
+}
+
+$('back-btn').addEventListener('click', () => {
+    showView('object-list');
 });
 
-// Helper functions
-function showStatus(message, type) {
-    uploadStatus.textContent = message;
-    uploadStatus.className = `status ${type}`;
-    uploadStatus.classList.remove('hidden');
+$('format-select').addEventListener('change', (e) => {
+    state.currentFormat = e.target.value;
+    renderObjectDetail();
+});
 
-    if (type === 'success') {
-        setTimeout(() => {
-            uploadStatus.classList.add('hidden');
-        }, 3000);
-    }
+$('copy-btn').addEventListener('click', () => {
+    const content = state.currentFormat === 'yaml' ? state.currentObject.yaml : state.currentObject.json;
+    navigator.clipboard.writeText(content).then(() => toast('Copied to clipboard'));
+});
+
+$('download-btn').addEventListener('click', () => {
+    const obj = state.currentObject;
+    const ext = state.currentFormat;
+    const content = ext === 'yaml' ? obj.yaml : obj.json;
+    const filename = (obj.namespace ? obj.namespace + '-' : '') + obj.name + '.' + ext;
+
+    const blob = new Blob([content], {type: 'text/plain'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+});
+
+function showView(view) {
+    $('welcome').classList.add('hidden');
+    $('object-list').classList.add('hidden');
+    $('object-detail').classList.add('hidden');
+    $(view).classList.remove('hidden');
 }
 
-function formatYAML(obj, indent = 0) {
-    // Simple YAML formatter
-    let result = '';
-    const spaces = '  '.repeat(indent);
-
-    for (const [key, value] of Object.entries(obj)) {
-        if (value === null || value === undefined) {
-            result += `${spaces}${key}: null\n`;
-        } else if (typeof value === 'object' && !Array.isArray(value)) {
-            result += `${spaces}${key}:\n`;
-            result += formatYAML(value, indent + 1);
-        } else if (Array.isArray(value)) {
-            result += `${spaces}${key}:\n`;
-            value.forEach(item => {
-                if (typeof item === 'object') {
-                    result += `${spaces}- \n`;
-                    result += formatYAML(item, indent + 1);
-                } else {
-                    result += `${spaces}- ${item}\n`;
-                }
-            });
-        } else if (typeof value === 'string') {
-            result += `${spaces}${key}: "${value}"\n`;
-        } else {
-            result += `${spaces}${key}: ${value}\n`;
-        }
-    }
-
-    return result;
+function showStatus(msg, isError) {
+    const el = $('db-status');
+    el.textContent = msg;
+    el.className = 'db-status' + (isError ? ' error' : '');
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2000);
 }

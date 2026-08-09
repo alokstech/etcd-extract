@@ -3,94 +3,83 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>etcd-extract - Kubernetes Object Extractor</title>
-    <link rel="stylesheet" href="/web/style.css">
+    <title>etcd-extract</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔧 etcd-extract</h1>
-            <p>Extract Kubernetes objects from etcd database files</p>
-        </header>
+    <nav class="topbar">
+        <div class="brand">etcd-extract</div>
+        <div class="db-selector">
+            <input type="text" id="db-path" placeholder="Enter path to etcd database file...">
+            <button id="load-btn">Load</button>
+        </div>
+        <div class="db-status" id="db-status"></div>
+    </nav>
 
-        <!-- Step 1: Upload -->
-        <section id="upload-section" class="card">
-            <h2>Step 1: Upload etcd Database</h2>
-            <div class="upload-area" id="upload-area">
-                <input type="file" id="file-input" hidden>
-                <div class="upload-content">
-                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <p><strong>Click to upload</strong> or drag and drop</p>
-                    <p class="hint">etcd database file (.db or .etcd)</p>
+    <div class="layout">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-placeholder" id="sidebar-placeholder">
+                Load a database to browse resources
+            </div>
+            <div id="sidebar-content" class="hidden">
+                <div class="sidebar-section">
+                    <h3 class="section-title">Cluster Scoped</h3>
+                    <ul id="cluster-resources" class="resource-list"></ul>
+                </div>
+                <div class="sidebar-section">
+                    <h3 class="section-title">Namespaced</h3>
+                    <div class="namespace-filter">
+                        <select id="namespace-select">
+                            <option value="">All Namespaces</option>
+                        </select>
+                    </div>
+                    <ul id="namespaced-resources" class="resource-list"></ul>
                 </div>
             </div>
-            <div id="upload-status" class="status hidden"></div>
-        </section>
+        </aside>
 
-        <!-- Step 2: Browse Resources -->
-        <section id="resources-section" class="card hidden">
-            <h2>Step 2: Available Resources</h2>
-            <div id="resources-loading" class="loading">Loading resources...</div>
-            <div id="resources-list" class="hidden"></div>
-        </section>
+        <main class="content">
+            <div id="welcome" class="welcome-msg">
+                <h2>Welcome to etcd-extract</h2>
+                <p>Load an etcd database file to browse and extract Kubernetes resources</p>
+            </div>
 
-        <!-- Step 3: Extract Options -->
-        <section id="extract-section" class="card hidden">
-            <h2>Step 3: Extract Objects</h2>
-            <form id="extract-form">
-                <div class="form-group">
-                    <label for="resource-select">Resource Type *</label>
-                    <select id="resource-select" required>
-                        <option value="">-- Select a resource --</option>
-                    </select>
+            <div id="object-list" class="hidden">
+                <div class="content-header">
+                    <h2 id="list-title"></h2>
+                    <span id="list-count" class="count-badge"></span>
                 </div>
-
-                <div class="form-group">
-                    <label for="namespace-input">Namespace</label>
-                    <input type="text" id="namespace-input" placeholder="Leave empty for all namespaces">
-                    <small>Optional: filter by specific namespace</small>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Namespace</th>
+                                <th>Name</th>
+                            </tr>
+                        </thead>
+                        <tbody id="objects-tbody"></tbody>
+                    </table>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <label for="name-input">Object Name</label>
-                    <input type="text" id="name-input" placeholder="Leave empty for all objects">
-                    <small>Optional: filter by specific object name</small>
+            <div id="object-detail" class="hidden">
+                <div class="detail-header">
+                    <button id="back-btn">&larr; Back</button>
+                    <span id="detail-title" class="detail-title"></span>
+                    <div class="detail-actions">
+                        <select id="format-select">
+                            <option value="yaml">YAML</option>
+                            <option value="json">JSON</option>
+                        </select>
+                        <button id="copy-btn">Copy</button>
+                        <button id="download-btn">Download</button>
+                    </div>
                 </div>
-
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="all-namespaces-check">
-                        Include all namespaces
-                    </label>
-                </div>
-
-                <div class="form-group">
-                    <label for="format-select">Output Format</label>
-                    <select id="format-select">
-                        <option value="yaml">YAML</option>
-                        <option value="json">JSON</option>
-                    </select>
-                </div>
-
-                <div class="button-group">
-                    <button type="submit" class="btn btn-primary">Extract Objects</button>
-                    <button type="button" id="download-btn" class="btn btn-secondary hidden">Download as ZIP</button>
-                </div>
-            </form>
-        </section>
-
-        <!-- Step 4: Results -->
-        <section id="results-section" class="card hidden">
-            <h2>Extraction Results</h2>
-            <div id="results-summary" class="summary"></div>
-            <div id="results-content" class="results-container"></div>
-        </section>
+                <pre id="object-content" class="object-content"></pre>
+            </div>
+        </main>
     </div>
 
-    <script src="/web/app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
