@@ -189,12 +189,18 @@ function renderObjectList() {
     $('list-title').textContent = state.selectedResource;
     $('list-count').textContent = state.objects.length + ' object(s)';
 
+    const hasNamespace = state.objects.some(obj => obj.namespace);
+    const thead = document.querySelector('#object-list thead tr');
+    thead.innerHTML = hasNamespace ? '<th>Namespace</th><th>Name</th>' : '<th>Name</th>';
+
     const tbody = $('objects-tbody');
     tbody.innerHTML = '';
 
     state.objects.forEach(obj => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${obj.namespace || '-'}</td><td>${obj.name}</td>`;
+        tr.innerHTML = hasNamespace
+            ? `<td>${obj.namespace || '-'}</td><td>${obj.name}</td>`
+            : `<td>${obj.name}</td>`;
         tr.addEventListener('click', () => loadObject(obj));
         tbody.appendChild(tr);
     });

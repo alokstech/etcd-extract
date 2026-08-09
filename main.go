@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	bolt "go.etcd.io/bbolt"
 	"gopkg.in/yaml.v3"
@@ -316,6 +317,74 @@ func parseObjectMeta(data []byte) map[string]interface{} {
 	return meta
 }
 
+func isLikelyString(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	if !utf8.Valid(data) {
+		return false
+	}
+	for _, b := range data {
+		if b < 0x20 && b != '\n' && b != '\r' && b != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeGenericField(f ProtoField, depth int) interface{} {
+	switch f.WireType {
+	case 0:
+		return f.Varint
+	case 1:
+		return f.Fixed64
+	case 2:
+		sub, err := parseProtoMessage(f.Bytes)
+		if err == nil && len(sub) > 0 {
+			return decodeGenericProto(f.Bytes, depth+1)
+		}
+		if isLikelyString(f.Bytes) {
+			return string(f.Bytes)
+		}
+		return base64.StdEncoding.EncodeToString(f.Bytes)
+	case 5:
+		return f.Fixed32
+	}
+	return nil
+}
+
+func decodeGenericProto(data []byte, depth int) interface{} {
+	if depth > 8 {
+		if isLikelyString(data) {
+			return string(data)
+		}
+		return base64.StdEncoding.EncodeToString(data)
+	}
+
+	fields, err := parseProtoMessage(data)
+	if err != nil || len(fields) == 0 {
+		if isLikelyString(data) {
+			return string(data)
+		}
+		return base64.StdEncoding.EncodeToString(data)
+	}
+
+	result := make(map[string]interface{})
+	for num, entries := range fields {
+		key := fmt.Sprintf("field_%d", num)
+		if len(entries) == 1 {
+			result[key] = decodeGenericField(entries[0], depth)
+		} else {
+			var vals []interface{}
+			for _, e := range entries {
+				vals = append(vals, decodeGenericField(e, depth))
+			}
+			result[key] = vals
+		}
+	}
+	return result
+}
+
 func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 	if len(data) < 4 || string(data[:4]) != "k8s\x00" {
 		return nil, fmt.Errorf("not k8s protobuf format")
@@ -393,6 +462,28 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 		// type (field 3)
 		if v := protoString(innerFields, 3); v != "" {
 			result["type"] = v
+		}
+
+	default:
+		for fieldNum, entries := range innerFields {
+			if fieldNum == 1 {
+				continue
+			}
+			key := fmt.Sprintf("field_%d", fieldNum)
+			if fieldNum == 2 {
+				key = "spec"
+			} else if fieldNum == 3 {
+				key = "status"
+			}
+			if len(entries) == 1 {
+				result[key] = decodeGenericField(entries[0], 0)
+			} else {
+				var vals []interface{}
+				for _, e := range entries {
+					vals = append(vals, decodeGenericField(e, 0))
+				}
+				result[key] = vals
+			}
 		}
 	}
 
