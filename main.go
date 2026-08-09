@@ -61,6 +61,65 @@ var clusterScopedResources = map[string]bool{
 	"csistoragecapacities":         true,
 }
 
+var k8sFieldNames = map[string]map[int]string{
+	"Namespace":                    {2: "spec", 3: "status"},
+	"Namespace.spec":               {1: "finalizers"},
+	"Namespace.status":             {1: "phase", 2: "conditions"},
+	"Node":                         {2: "spec", 3: "status"},
+	"Node.spec":                    {1: "podCIDR", 3: "providerID", 4: "unschedulable", 5: "taints", 7: "podCIDRs"},
+	"Node.status":                  {1: "capacity", 2: "allocatable", 3: "phase", 4: "conditions", 5: "addresses", 6: "daemonEndpoints", 7: "nodeInfo", 8: "images", 9: "volumesInUse", 10: "volumesAttached"},
+	"PersistentVolume":             {2: "spec", 3: "status"},
+	"PersistentVolume.spec":        {1: "capacity", 2: "persistentVolumeSource", 3: "accessModes", 4: "claimRef", 5: "persistentVolumeReclaimPolicy", 6: "storageClassName", 7: "mountOptions", 8: "volumeMode", 9: "nodeAffinity"},
+	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason"},
+	"PersistentVolumeClaim":        {2: "spec", 3: "status"},
+	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode"},
+	"PersistentVolumeClaim.status": {1: "phase", 2: "accessModes", 3: "capacity", 4: "conditions"},
+	"Pod":                          {2: "spec", 3: "status"},
+	"Pod.spec":                     {1: "volumes", 2: "containers", 3: "restartPolicy", 4: "terminationGracePeriodSeconds", 6: "dnsPolicy", 7: "nodeSelector", 8: "serviceAccountName", 11: "nodeName", 14: "securityContext", 16: "imagePullSecrets", 17: "hostname", 19: "affinity", 20: "schedulerName", 21: "initContainers", 22: "tolerations", 24: "priority", 25: "priorityClassName", 28: "preemptionPolicy"},
+	"Pod.status":                   {1: "phase", 2: "conditions", 3: "message", 4: "reason", 5: "hostIP", 6: "podIP", 7: "startTime", 8: "containerStatuses", 10: "initContainerStatuses", 14: "podIPs"},
+	"Deployment":                   {2: "spec", 3: "status"},
+	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 9: "progressDeadlineSeconds"},
+	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "readyReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "availableReplicas"},
+	"ReplicaSet":                   {2: "spec", 3: "status"},
+	"ReplicaSet.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
+	"ReplicaSet.status":            {1: "replicas", 2: "fullyLabeledReplicas", 3: "readyReplicas", 4: "availableReplicas", 5: "observedGeneration", 6: "conditions"},
+	"DaemonSet":                    {2: "spec", 3: "status"},
+	"DaemonSet.spec":               {1: "selector", 2: "template", 3: "updateStrategy", 4: "minReadySeconds", 5: "revisionHistoryLimit"},
+	"DaemonSet.status":             {1: "currentNumberScheduled", 2: "numberMisscheduled", 3: "desiredNumberScheduled", 4: "numberReady", 5: "observedGeneration", 6: "updatedNumberScheduled", 7: "numberAvailable", 8: "numberUnavailable", 9: "conditions"},
+	"StatefulSet":                  {2: "spec", 3: "status"},
+	"StatefulSet.spec":             {1: "replicas", 2: "selector", 3: "template", 4: "volumeClaimTemplates", 5: "serviceName", 6: "podManagementPolicy", 7: "updateStrategy", 8: "revisionHistoryLimit", 9: "minReadySeconds"},
+	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 9: "conditions", 10: "availableReplicas"},
+	"Service":                      {2: "spec", 3: "status"},
+	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 14: "ipFamilies", 15: "ipFamilyPolicy", 19: "clusterIPs"},
+	"Service.status":               {1: "loadBalancer", 2: "conditions"},
+	"Endpoints":                    {2: "subsets"},
+	"Job":                          {2: "spec", 3: "status"},
+	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished"},
+	"Job.status":                   {1: "conditions", 2: "startTime", 3: "completionTime", 4: "active", 5: "succeeded", 6: "failed"},
+	"CronJob":                      {2: "spec", 3: "status"},
+	"CronJob.spec":                 {1: "schedule", 2: "startingDeadlineSeconds", 3: "concurrencyPolicy", 4: "suspend", 5: "jobTemplate", 6: "successfulJobsHistoryLimit", 7: "failedJobsHistoryLimit"},
+	"CronJob.status":               {1: "active", 4: "lastScheduleTime", 5: "lastSuccessfulTime"},
+	"Ingress":                      {2: "spec", 3: "status"},
+	"Ingress.spec":                 {1: "ingressClassName", 2: "defaultBackend", 3: "tls", 4: "rules"},
+	"Ingress.status":               {1: "loadBalancer"},
+	"ClusterRole":                  {2: "rules", 3: "aggregationRule"},
+	"ClusterRole.rules":            {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
+	"ClusterRoleBinding":           {2: "subjects", 3: "roleRef"},
+	"ClusterRoleBinding.subjects":  {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"ClusterRoleBinding.roleRef":   {1: "apiGroup", 2: "kind", 3: "name"},
+	"Role":                         {2: "rules"},
+	"Role.rules":                   {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames"},
+	"RoleBinding":                  {2: "subjects", 3: "roleRef"},
+	"RoleBinding.subjects":         {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"RoleBinding.roleRef":          {1: "apiGroup", 2: "kind", 3: "name"},
+	"ServiceAccount":               {2: "secrets", 3: "imagePullSecrets", 4: "automountServiceAccountToken"},
+	"StorageClass":                 {2: "provisioner", 3: "parameters", 4: "reclaimPolicy", 5: "mountOptions", 6: "allowVolumeExpansion", 7: "volumeBindingMode", 8: "allowedTopologies"},
+	"CSINode":                      {2: "spec"},
+	"CSINode.spec":                 {1: "drivers"},
+	"LimitRange":                   {2: "spec"},
+	"ResourceQuota":                {2: "spec", 3: "status"},
+}
+
 type ParsedKey struct {
 	Resource  string
 	Namespace string
@@ -353,7 +412,31 @@ func decodeGenericField(f ProtoField, depth int) interface{} {
 	return nil
 }
 
-func decodeGenericProto(data []byte, depth int) interface{} {
+func isMapEntries(entries []ProtoField) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	for _, e := range entries {
+		if e.WireType != 2 {
+			return false
+		}
+		ef, err := parseProtoMessage(e.Bytes)
+		if err != nil || len(ef) != 2 {
+			return false
+		}
+		f1, ok1 := ef[1]
+		_, ok2 := ef[2]
+		if !ok1 || !ok2 || len(f1) != 1 || f1[0].WireType != 2 {
+			return false
+		}
+		if !isLikelyString(f1[0].Bytes) {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeProtoFields(data []byte, names map[int]string, depth int) interface{} {
 	if depth > 8 {
 		if isLikelyString(data) {
 			return string(data)
@@ -369,10 +452,39 @@ func decodeGenericProto(data []byte, depth int) interface{} {
 		return base64.StdEncoding.EncodeToString(data)
 	}
 
+	// Detect timestamp pattern (field 1=seconds, optional field 2=nanos)
+	if len(fields) <= 2 {
+		if f1, ok := fields[1]; ok && len(f1) == 1 && f1[0].WireType == 0 {
+			seconds := int64(f1[0].Varint)
+			if seconds > 946684800 && seconds < 2524608000 {
+				var nanos int64
+				if f2, ok := fields[2]; ok && len(f2) > 0 && f2[0].WireType == 0 {
+					nanos = int64(f2[0].Varint)
+				}
+				return time.Unix(seconds, nanos).UTC().Format(time.RFC3339)
+			}
+		}
+	}
+
 	result := make(map[string]interface{})
 	for num, entries := range fields {
 		key := fmt.Sprintf("field_%d", num)
-		if len(entries) == 1 {
+		if names != nil {
+			if name, ok := names[num]; ok {
+				key = name
+			}
+		}
+		if isMapEntries(entries) {
+			m := make(map[string]interface{})
+			for _, e := range entries {
+				ef, _ := parseProtoMessage(e.Bytes)
+				k := protoString(ef, 1)
+				if k != "" && len(ef[2]) > 0 {
+					m[k] = decodeGenericField(ef[2][0], depth+1)
+				}
+			}
+			result[key] = m
+		} else if len(entries) == 1 {
 			result[key] = decodeGenericField(entries[0], depth)
 		} else {
 			var vals []interface{}
@@ -383,6 +495,10 @@ func decodeGenericProto(data []byte, depth int) interface{} {
 		}
 	}
 	return result
+}
+
+func decodeGenericProto(data []byte, depth int) interface{} {
+	return decodeProtoFields(data, nil, depth)
 }
 
 func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
@@ -413,6 +529,15 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 	// Raw object (field 2)
 	rawBytes := protoBytes(wrapperFields, 2)
 	if rawBytes == nil {
+		return result, nil
+	}
+
+	// Try JSON decode on raw inner content
+	var jsonObj map[string]interface{}
+	if json.Unmarshal(rawBytes, &jsonObj) == nil {
+		for k, v := range jsonObj {
+			result[k] = v
+		}
 		return result, nil
 	}
 
@@ -465,22 +590,38 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 		}
 
 	default:
+		topNames := k8sFieldNames[kind]
 		for fieldNum, entries := range innerFields {
 			if fieldNum == 1 {
 				continue
 			}
 			key := fmt.Sprintf("field_%d", fieldNum)
-			if fieldNum == 2 {
+			if topNames != nil {
+				if name, ok := topNames[fieldNum]; ok {
+					key = name
+				}
+			} else if fieldNum == 2 {
 				key = "spec"
 			} else if fieldNum == 3 {
 				key = "status"
 			}
+
+			sectionNames := k8sFieldNames[kind+"."+key]
+
 			if len(entries) == 1 {
-				result[key] = decodeGenericField(entries[0], 0)
+				if entries[0].WireType == 2 && sectionNames != nil {
+					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, 0)
+				} else {
+					result[key] = decodeGenericField(entries[0], 0)
+				}
 			} else {
 				var vals []interface{}
 				for _, e := range entries {
-					vals = append(vals, decodeGenericField(e, 0))
+					if e.WireType == 2 && sectionNames != nil {
+						vals = append(vals, decodeProtoFields(e.Bytes, sectionNames, 0))
+					} else {
+						vals = append(vals, decodeGenericField(e, 0))
+					}
 				}
 				result[key] = vals
 			}
