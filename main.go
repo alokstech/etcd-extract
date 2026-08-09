@@ -1242,6 +1242,10 @@ func main() {
 
 	dbPath := flag.Arg(0)
 
+	if flag.NArg() >= 2 && *name == "" {
+		*name = flag.Arg(1)
+	}
+
 	// Check if file exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: Database file not found: %s\n", dbPath)
