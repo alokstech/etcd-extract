@@ -62,6 +62,8 @@ fileInput.addEventListener('change', e => {
 
 $('change-db-btn').addEventListener('click', () => {
     showView('upload-view');
+    uploadArea.classList.remove('hidden');
+    $('upload-progress').classList.add('hidden');
     $('sidebar-placeholder').classList.remove('hidden');
     $('sidebar-content').classList.add('hidden');
     $('db-filename').textContent = 'No database loaded';
