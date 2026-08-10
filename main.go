@@ -804,7 +804,10 @@ func parseEtcdPath(path string) ParsedKey {
 
 	if strings.Contains(remaining[0], ".") {
 		// API group path: <group>/<resource>/[<namespace>/]<name>
-		// Use segment count: 3 = cluster-scoped, 4+ = namespaced
+		if len(remaining) >= 2 {
+			result.Resource = remaining[0] + "/" + remaining[1]
+		}
+		// Use segment count: 3 = cluster-scoped, 4 = namespaced
 		switch len(remaining) {
 		case 3:
 			result.Name = remaining[2]
