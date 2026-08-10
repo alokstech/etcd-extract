@@ -61,40 +61,63 @@ var clusterScopedResources = map[string]bool{
 	"csistoragecapacities":         true,
 }
 
+var podSpecFields = map[int]string{
+	1: "volumes", 2: "containers", 3: "restartPolicy", 4: "terminationGracePeriodSeconds",
+	6: "dnsPolicy", 7: "nodeSelector", 8: "serviceAccountName", 11: "nodeName",
+	14: "securityContext", 16: "imagePullSecrets", 17: "hostname",
+	19: "affinity", 20: "schedulerName", 21: "initContainers", 22: "tolerations",
+	24: "priority", 25: "priorityClassName", 28: "preemptionPolicy",
+}
+
+var podTemplateFields = map[int]string{1: "metadata", 2: "spec"}
+
 var k8sFieldNames = map[string]map[int]string{
 	"Namespace":                    {2: "spec", 3: "status"},
 	"Namespace.spec":               {1: "finalizers"},
 	"Namespace.status":             {1: "phase", 2: "conditions"},
 	"Node":                         {2: "spec", 3: "status"},
-	"Node.spec":                    {1: "podCIDR", 3: "providerID", 4: "unschedulable", 5: "taints", 7: "podCIDRs"},
+	"Node.spec":                    {1: "podCIDR", 2: "externalID", 3: "providerID", 4: "unschedulable", 5: "taints", 7: "podCIDRs"},
 	"Node.status":                  {1: "capacity", 2: "allocatable", 3: "phase", 4: "conditions", 5: "addresses", 6: "daemonEndpoints", 7: "nodeInfo", 8: "images", 9: "volumesInUse", 10: "volumesAttached"},
 	"PersistentVolume":             {2: "spec", 3: "status"},
-	"PersistentVolume.spec":        {1: "capacity", 2: "persistentVolumeSource", 3: "accessModes", 4: "claimRef", 5: "persistentVolumeReclaimPolicy", 6: "storageClassName", 7: "mountOptions", 8: "volumeMode", 9: "nodeAffinity"},
+	"PersistentVolume.spec":                       {1: "capacity", 2: "persistentVolumeSource", 3: "accessModes", 4: "claimRef", 5: "persistentVolumeReclaimPolicy", 6: "storageClassName", 7: "mountOptions", 8: "volumeMode", 9: "nodeAffinity"},
+	"PersistentVolume.spec.persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
 	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason"},
 	"PersistentVolumeClaim":        {2: "spec", 3: "status"},
 	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode"},
 	"PersistentVolumeClaim.status": {1: "phase", 2: "accessModes", 3: "capacity", 4: "conditions"},
 	"Pod":                          {2: "spec", 3: "status"},
-	"Pod.spec":                     {1: "volumes", 2: "containers", 3: "restartPolicy", 4: "terminationGracePeriodSeconds", 6: "dnsPolicy", 7: "nodeSelector", 8: "serviceAccountName", 11: "nodeName", 14: "securityContext", 16: "imagePullSecrets", 17: "hostname", 19: "affinity", 20: "schedulerName", 21: "initContainers", 22: "tolerations", 24: "priority", 25: "priorityClassName", 28: "preemptionPolicy"},
+	"Pod.spec":                     podSpecFields,
 	"Pod.status":                   {1: "phase", 2: "conditions", 3: "message", 4: "reason", 5: "hostIP", 6: "podIP", 7: "startTime", 8: "containerStatuses", 10: "initContainerStatuses", 14: "podIPs"},
 	"Deployment":                   {2: "spec", 3: "status"},
 	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 9: "progressDeadlineSeconds"},
+	"Deployment.spec.template":     podTemplateFields,
+	"Deployment.spec.template.spec": podSpecFields,
 	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "readyReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "availableReplicas"},
+	"Deployment.status.conditions": {1: "type", 2: "status", 4: "reason", 5: "message", 6: "lastUpdateTime", 7: "lastTransitionTime"},
 	"ReplicaSet":                   {2: "spec", 3: "status"},
 	"ReplicaSet.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
+	"ReplicaSet.spec.template":     podTemplateFields,
+	"ReplicaSet.spec.template.spec": podSpecFields,
 	"ReplicaSet.status":            {1: "replicas", 2: "fullyLabeledReplicas", 3: "readyReplicas", 4: "availableReplicas", 5: "observedGeneration", 6: "conditions"},
 	"DaemonSet":                    {2: "spec", 3: "status"},
 	"DaemonSet.spec":               {1: "selector", 2: "template", 3: "updateStrategy", 4: "minReadySeconds", 5: "revisionHistoryLimit"},
+	"DaemonSet.spec.template":      podTemplateFields,
+	"DaemonSet.spec.template.spec": podSpecFields,
 	"DaemonSet.status":             {1: "currentNumberScheduled", 2: "numberMisscheduled", 3: "desiredNumberScheduled", 4: "numberReady", 5: "observedGeneration", 6: "updatedNumberScheduled", 7: "numberAvailable", 8: "numberUnavailable", 9: "conditions"},
 	"StatefulSet":                  {2: "spec", 3: "status"},
 	"StatefulSet.spec":             {1: "replicas", 2: "selector", 3: "template", 4: "volumeClaimTemplates", 5: "serviceName", 6: "podManagementPolicy", 7: "updateStrategy", 8: "revisionHistoryLimit", 9: "minReadySeconds"},
+	"StatefulSet.spec.template":    podTemplateFields,
+	"StatefulSet.spec.template.spec": podSpecFields,
 	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 9: "conditions", 10: "availableReplicas"},
 	"Service":                      {2: "spec", 3: "status"},
 	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 14: "ipFamilies", 15: "ipFamilyPolicy", 19: "clusterIPs"},
+	"Service.spec.ports":           {1: "name", 2: "protocol", 3: "port", 4: "targetPort", 5: "nodePort"},
 	"Service.status":               {1: "loadBalancer", 2: "conditions"},
 	"Endpoints":                    {2: "subsets"},
 	"Job":                          {2: "spec", 3: "status"},
 	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished"},
+	"Job.spec.template":            podTemplateFields,
+	"Job.spec.template.spec":       podSpecFields,
 	"Job.status":                   {1: "conditions", 2: "startTime", 3: "completionTime", 4: "active", 5: "succeeded", 6: "failed"},
 	"CronJob":                      {2: "spec", 3: "status"},
 	"CronJob.spec":                 {1: "schedule", 2: "startingDeadlineSeconds", 3: "concurrencyPolicy", 4: "suspend", 5: "jobTemplate", 6: "successfulJobsHistoryLimit", 7: "failedJobsHistoryLimit"},
@@ -118,6 +141,64 @@ var k8sFieldNames = map[string]map[int]string{
 	"CSINode.spec":                 {1: "drivers"},
 	"LimitRange":                   {2: "spec"},
 	"ResourceQuota":                {2: "spec", 3: "status"},
+}
+
+var commonFieldNames = map[string]map[int]string{
+	"containers":           {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 15: "imagePullPolicy", 16: "securityContext", 22: "startupProbe"},
+	"initContainers":       {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 15: "imagePullPolicy", 16: "securityContext", 22: "startupProbe"},
+	"template":             podTemplateFields,
+	"selector":             {1: "matchLabels", 2: "matchExpressions"},
+	"ports":                {1: "name", 2: "hostPort", 3: "containerPort", 4: "protocol"},
+	"env":                  {1: "name", 2: "value", 3: "valueFrom"},
+	"volumeMounts":         {1: "name", 2: "readOnly", 3: "mountPath", 4: "subPath"},
+	"volumes":              {1: "name"},
+	"resources":            {1: "limits", 2: "requests"},
+	"conditions":           {1: "type", 2: "status", 3: "lastProbeTime", 4: "lastTransitionTime", 5: "reason", 6: "message"},
+	"containerStatuses":    {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 7: "image", 8: "imageID", 9: "containerID", 10: "started"},
+	"initContainerStatuses": {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 7: "image", 8: "imageID", 9: "containerID", 10: "started"},
+	"claimRef":             {1: "kind", 2: "namespace", 3: "name", 4: "uid", 5: "apiVersion", 6: "resourceVersion", 7: "fieldPath"},
+	"subjects":             {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"roleRef":              {1: "apiGroup", 2: "kind", 3: "name"},
+	"taints":               {1: "key", 2: "value", 3: "effect", 4: "timeAdded"},
+	"tolerations":          {1: "key", 2: "operator", 3: "value", 4: "effect", 5: "tolerationSeconds"},
+	"addresses":            {1: "type", 2: "address"},
+	"nodeInfo":             {1: "machineID", 2: "systemUUID", 3: "bootID", 4: "kernelVersion", 5: "osImage", 6: "containerRuntimeVersion", 7: "kubeletVersion", 8: "kubeProxyVersion", 9: "operatingSystem", 10: "architecture"},
+	"images":               {1: "names", 2: "sizeBytes"},
+	"strategy":             {1: "type", 2: "rollingUpdate"},
+	"updateStrategy":       {1: "type", 2: "rollingUpdate"},
+	"rules":                {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
+	"persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
+	"nfs":                  {1: "server", 2: "path", 3: "readOnly"},
+	"hostPath":             {1: "path", 2: "type"},
+	"local":                {1: "path", 2: "fsType"},
+	"csi":                  {1: "driver", 2: "volumeHandle", 3: "readOnly", 4: "fsType", 5: "volumeAttributes", 6: "controllerPublishSecretRef", 7: "nodeStageSecretRef", 8: "nodePublishSecretRef"},
+	"securityContext":      {1: "capabilities", 2: "privileged", 3: "seLinuxOptions", 4: "runAsUser", 7: "runAsNonRoot", 8: "readOnlyRootFilesystem", 15: "allowPrivilegeEscalation", 18: "runAsGroup", 21: "seccompProfile"},
+	"livenessProbe":        {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"readinessProbe":       {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"startupProbe":         {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"handler":              {1: "exec", 2: "httpGet", 3: "tcpSocket"},
+	"exec":                 {1: "command"},
+	"httpGet":              {1: "path", 2: "port", 3: "host", 4: "scheme", 5: "httpHeaders"},
+	"tcpSocket":            {1: "port", 2: "host"},
+	"valueFrom":            {1: "fieldRef", 2: "resourceFieldRef", 3: "configMapKeyRef", 4: "secretKeyRef"},
+	"fieldRef":             {1: "apiVersion", 2: "fieldPath"},
+	"configMapKeyRef":      {1: "name", 2: "key", 3: "optional"},
+	"secretKeyRef":         {1: "name", 2: "key", 3: "optional"},
+	"matchExpressions":     {1: "key", 2: "operator", 3: "values"},
+	"drivers":              {1: "name", 2: "nodeID", 3: "topologyKeys", 4: "allocatable"},
+	"limits":               {1: "type", 2: "max", 3: "min", 4: "default", 5: "defaultRequest", 6: "maxLimitRequestRatio"},
+	"nodeAffinity":         {1: "required", 2: "preferred"},
+	"required":             {1: "nodeSelectorTerms"},
+	"preferred":            {1: "weight", 2: "preference"},
+	"nodeSelectorTerms":    {1: "matchExpressions", 2: "matchFields"},
+	"affinity":             {1: "nodeAffinity", 2: "podAffinity", 3: "podAntiAffinity"},
+	"rollingUpdate":        {1: "maxUnavailable", 2: "maxSurge"},
+	"daemonEndpoints":      {1: "kubeletEndpoint"},
+	"kubeletEndpoint":      {1: "port"},
+	"imagePullSecrets":     {1: "name"},
+	"secrets":              {1: "name", 2: "namespace"},
+	"tls":                  {1: "hosts", 2: "secretName"},
+	"jobTemplate":          {1: "metadata", 2: "spec"},
 }
 
 type ParsedKey struct {
@@ -391,7 +472,7 @@ func isLikelyString(data []byte) bool {
 	return true
 }
 
-func decodeGenericField(f ProtoField, depth int) interface{} {
+func decodeGenericField(f ProtoField, pathPrefix string, depth int) interface{} {
 	switch f.WireType {
 	case 0:
 		return f.Varint
@@ -400,7 +481,7 @@ func decodeGenericField(f ProtoField, depth int) interface{} {
 	case 2:
 		sub, err := parseProtoMessage(f.Bytes)
 		if err == nil && len(sub) > 0 {
-			return decodeGenericProto(f.Bytes, depth+1)
+			return decodeProtoFields(f.Bytes, nil, pathPrefix, depth+1)
 		}
 		if isLikelyString(f.Bytes) {
 			return string(f.Bytes)
@@ -436,7 +517,7 @@ func isMapEntries(entries []ProtoField) bool {
 	return true
 }
 
-func decodeProtoFields(data []byte, names map[int]string, depth int) interface{} {
+func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, depth int) interface{} {
 	if depth > 8 {
 		if isLikelyString(data) {
 			return string(data)
@@ -466,6 +547,13 @@ func decodeProtoFields(data []byte, names map[int]string, depth int) interface{}
 		}
 	}
 
+	// Detect Quantity-like wrapper: single field 1 that is a string (e.g. "20Gi", "100m")
+	if len(fields) == 1 {
+		if f1, ok := fields[1]; ok && len(f1) == 1 && f1[0].WireType == 2 && isLikelyString(f1[0].Bytes) {
+			return string(f1[0].Bytes)
+		}
+	}
+
 	result := make(map[string]interface{})
 	for num, entries := range fields {
 		key := fmt.Sprintf("field_%d", num)
@@ -474,22 +562,47 @@ func decodeProtoFields(data []byte, names map[int]string, depth int) interface{}
 				key = name
 			}
 		}
-		if isMapEntries(entries) {
+
+		childPath := pathPrefix
+		if key != fmt.Sprintf("field_%d", num) && pathPrefix != "" {
+			childPath = pathPrefix + "." + key
+		} else if key != fmt.Sprintf("field_%d", num) {
+			childPath = key
+		}
+
+		// Look up child field names: first try k8sFieldNames by path, then commonFieldNames by field name
+		var childNames map[int]string
+		if childPath != "" {
+			childNames = k8sFieldNames[childPath]
+		}
+		if childNames == nil && key != fmt.Sprintf("field_%d", num) {
+			childNames = commonFieldNames[key]
+		}
+
+		if childNames == nil && isMapEntries(entries) {
 			m := make(map[string]interface{})
 			for _, e := range entries {
 				ef, _ := parseProtoMessage(e.Bytes)
 				k := protoString(ef, 1)
 				if k != "" && len(ef[2]) > 0 {
-					m[k] = decodeGenericField(ef[2][0], depth+1)
+					m[k] = decodeGenericField(ef[2][0], childPath, depth+1)
 				}
 			}
 			result[key] = m
 		} else if len(entries) == 1 {
-			result[key] = decodeGenericField(entries[0], depth)
+			if entries[0].WireType == 2 && childNames != nil {
+				result[key] = decodeProtoFields(entries[0].Bytes, childNames, childPath, depth+1)
+			} else {
+				result[key] = decodeGenericField(entries[0], childPath, depth)
+			}
 		} else {
 			var vals []interface{}
 			for _, e := range entries {
-				vals = append(vals, decodeGenericField(e, depth))
+				if e.WireType == 2 && childNames != nil {
+					vals = append(vals, decodeProtoFields(e.Bytes, childNames, childPath, depth+1))
+				} else {
+					vals = append(vals, decodeGenericField(e, childPath, depth))
+				}
 			}
 			result[key] = vals
 		}
@@ -498,7 +611,7 @@ func decodeProtoFields(data []byte, names map[int]string, depth int) interface{}
 }
 
 func decodeGenericProto(data []byte, depth int) interface{} {
-	return decodeProtoFields(data, nil, depth)
+	return decodeProtoFields(data, nil, "", depth)
 }
 
 func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
@@ -606,21 +719,22 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 				key = "status"
 			}
 
-			sectionNames := k8sFieldNames[kind+"."+key]
+			sectionPath := kind + "." + key
+			sectionNames := k8sFieldNames[sectionPath]
 
 			if len(entries) == 1 {
 				if entries[0].WireType == 2 && sectionNames != nil {
-					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, 0)
+					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, sectionPath, 0)
 				} else {
-					result[key] = decodeGenericField(entries[0], 0)
+					result[key] = decodeGenericField(entries[0], sectionPath, 0)
 				}
 			} else {
 				var vals []interface{}
 				for _, e := range entries {
 					if e.WireType == 2 && sectionNames != nil {
-						vals = append(vals, decodeProtoFields(e.Bytes, sectionNames, 0))
+						vals = append(vals, decodeProtoFields(e.Bytes, sectionNames, sectionPath, 0))
 					} else {
-						vals = append(vals, decodeGenericField(e, 0))
+						vals = append(vals, decodeGenericField(e, sectionPath, 0))
 					}
 				}
 				result[key] = vals
