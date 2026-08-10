@@ -1,15 +1,23 @@
 package main
 
 import (
+	"embed"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
+	"log"
+	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	bolt "go.etcd.io/bbolt"
 	"gopkg.in/yaml.v3"
@@ -28,7 +36,12 @@ var (
 	outputShort   = flag.String("o", "", "Output format (short form)")
 	list          = flag.Bool("list", false, "List available resources in the database")
 	listShort     = flag.Bool("l", false, "List available resources (short form)")
+	serve         = flag.Bool("serve", false, "Start web GUI server")
+	port          = flag.String("port", "8080", "Port for web server (used with --serve)")
 )
+
+//go:embed web
+var webFS embed.FS
 
 // ClusterScopedResources defines resources that don't have a namespace
 var clusterScopedResources = map[string]bool{
@@ -46,6 +59,146 @@ var clusterScopedResources = map[string]bool{
 	"csidrivers":                   true,
 	"csinodes":                     true,
 	"csistoragecapacities":         true,
+}
+
+var podSpecFields = map[int]string{
+	1: "volumes", 2: "containers", 3: "restartPolicy", 4: "terminationGracePeriodSeconds",
+	6: "dnsPolicy", 7: "nodeSelector", 8: "serviceAccountName", 11: "nodeName",
+	14: "securityContext", 16: "imagePullSecrets", 17: "hostname",
+	19: "affinity", 20: "schedulerName", 21: "initContainers", 22: "tolerations",
+	24: "priority", 25: "priorityClassName", 28: "preemptionPolicy",
+}
+
+var podTemplateFields = map[int]string{1: "metadata", 2: "spec"}
+
+var k8sFieldNames = map[string]map[int]string{
+	"Namespace":                    {2: "spec", 3: "status"},
+	"Namespace.spec":               {1: "finalizers"},
+	"Namespace.status":             {1: "phase", 2: "conditions"},
+	"Node":                         {2: "spec", 3: "status"},
+	"Node.spec":                    {1: "podCIDR", 2: "externalID", 3: "providerID", 4: "unschedulable", 5: "taints", 7: "podCIDRs"},
+	"Node.status":                  {1: "capacity", 2: "allocatable", 3: "phase", 4: "conditions", 5: "addresses", 6: "daemonEndpoints", 7: "nodeInfo", 8: "images", 9: "volumesInUse", 10: "volumesAttached"},
+	"PersistentVolume":             {2: "spec", 3: "status"},
+	"PersistentVolume.spec":                       {1: "capacity", 2: "persistentVolumeSource", 3: "accessModes", 4: "claimRef", 5: "persistentVolumeReclaimPolicy", 6: "storageClassName", 7: "mountOptions", 8: "volumeMode", 9: "nodeAffinity"},
+	"PersistentVolume.spec.persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
+	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason"},
+	"PersistentVolumeClaim":        {2: "spec", 3: "status"},
+	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode"},
+	"PersistentVolumeClaim.status": {1: "phase", 2: "accessModes", 3: "capacity", 4: "conditions"},
+	"Pod":                          {2: "spec", 3: "status"},
+	"Pod.spec":                     podSpecFields,
+	"Pod.status":                   {1: "phase", 2: "conditions", 3: "message", 4: "reason", 5: "hostIP", 6: "podIP", 7: "startTime", 8: "containerStatuses", 10: "initContainerStatuses", 14: "podIPs"},
+	"Deployment":                   {2: "spec", 3: "status"},
+	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 9: "progressDeadlineSeconds"},
+	"Deployment.spec.template":     podTemplateFields,
+	"Deployment.spec.template.spec": podSpecFields,
+	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "readyReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "availableReplicas"},
+	"Deployment.status.conditions": {1: "type", 2: "status", 4: "reason", 5: "message", 6: "lastUpdateTime", 7: "lastTransitionTime"},
+	"ReplicaSet":                   {2: "spec", 3: "status"},
+	"ReplicaSet.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
+	"ReplicaSet.spec.template":     podTemplateFields,
+	"ReplicaSet.spec.template.spec": podSpecFields,
+	"ReplicaSet.status":            {1: "replicas", 2: "fullyLabeledReplicas", 3: "readyReplicas", 4: "availableReplicas", 5: "observedGeneration", 6: "conditions"},
+	"DaemonSet":                    {2: "spec", 3: "status"},
+	"DaemonSet.spec":               {1: "selector", 2: "template", 3: "updateStrategy", 4: "minReadySeconds", 5: "revisionHistoryLimit"},
+	"DaemonSet.spec.template":      podTemplateFields,
+	"DaemonSet.spec.template.spec": podSpecFields,
+	"DaemonSet.status":             {1: "currentNumberScheduled", 2: "numberMisscheduled", 3: "desiredNumberScheduled", 4: "numberReady", 5: "observedGeneration", 6: "updatedNumberScheduled", 7: "numberAvailable", 8: "numberUnavailable", 9: "conditions"},
+	"StatefulSet":                  {2: "spec", 3: "status"},
+	"StatefulSet.spec":             {1: "replicas", 2: "selector", 3: "template", 4: "volumeClaimTemplates", 5: "serviceName", 6: "podManagementPolicy", 7: "updateStrategy", 8: "revisionHistoryLimit", 9: "minReadySeconds"},
+	"StatefulSet.spec.template":    podTemplateFields,
+	"StatefulSet.spec.template.spec": podSpecFields,
+	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 9: "conditions", 10: "availableReplicas"},
+	"Service":                      {2: "spec", 3: "status"},
+	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 14: "ipFamilies", 15: "ipFamilyPolicy", 19: "clusterIPs"},
+	"Service.spec.ports":           {1: "name", 2: "protocol", 3: "port", 4: "targetPort", 5: "nodePort"},
+	"Service.status":               {1: "loadBalancer", 2: "conditions"},
+	"Endpoints":                    {2: "subsets"},
+	"Job":                          {2: "spec", 3: "status"},
+	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished"},
+	"Job.spec.template":            podTemplateFields,
+	"Job.spec.template.spec":       podSpecFields,
+	"Job.status":                   {1: "conditions", 2: "startTime", 3: "completionTime", 4: "active", 5: "succeeded", 6: "failed"},
+	"CronJob":                      {2: "spec", 3: "status"},
+	"CronJob.spec":                 {1: "schedule", 2: "startingDeadlineSeconds", 3: "concurrencyPolicy", 4: "suspend", 5: "jobTemplate", 6: "successfulJobsHistoryLimit", 7: "failedJobsHistoryLimit"},
+	"CronJob.status":               {1: "active", 4: "lastScheduleTime", 5: "lastSuccessfulTime"},
+	"Ingress":                      {2: "spec", 3: "status"},
+	"Ingress.spec":                 {1: "ingressClassName", 2: "defaultBackend", 3: "tls", 4: "rules"},
+	"Ingress.status":               {1: "loadBalancer"},
+	"ClusterRole":                  {2: "rules", 3: "aggregationRule"},
+	"ClusterRole.rules":            {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
+	"ClusterRoleBinding":           {2: "subjects", 3: "roleRef"},
+	"ClusterRoleBinding.subjects":  {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"ClusterRoleBinding.roleRef":   {1: "apiGroup", 2: "kind", 3: "name"},
+	"Role":                         {2: "rules"},
+	"Role.rules":                   {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames"},
+	"RoleBinding":                  {2: "subjects", 3: "roleRef"},
+	"RoleBinding.subjects":         {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"RoleBinding.roleRef":          {1: "apiGroup", 2: "kind", 3: "name"},
+	"ServiceAccount":               {2: "secrets", 3: "imagePullSecrets", 4: "automountServiceAccountToken"},
+	"StorageClass":                 {2: "provisioner", 3: "parameters", 4: "reclaimPolicy", 5: "mountOptions", 6: "allowVolumeExpansion", 7: "volumeBindingMode", 8: "allowedTopologies"},
+	"CSINode":                      {2: "spec"},
+	"CSINode.spec":                 {1: "drivers"},
+	"LimitRange":                   {2: "spec"},
+	"ResourceQuota":                {2: "spec", 3: "status"},
+}
+
+var commonFieldNames = map[string]map[int]string{
+	"containers":           {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 15: "imagePullPolicy", 16: "securityContext", 22: "startupProbe"},
+	"initContainers":       {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 15: "imagePullPolicy", 16: "securityContext", 22: "startupProbe"},
+	"template":             podTemplateFields,
+	"selector":             {1: "matchLabels", 2: "matchExpressions"},
+	"ports":                {1: "name", 2: "hostPort", 3: "containerPort", 4: "protocol"},
+	"env":                  {1: "name", 2: "value", 3: "valueFrom"},
+	"volumeMounts":         {1: "name", 2: "readOnly", 3: "mountPath", 4: "subPath"},
+	"volumes":              {1: "name"},
+	"resources":            {1: "limits", 2: "requests"},
+	"conditions":           {1: "type", 2: "status", 3: "lastProbeTime", 4: "lastTransitionTime", 5: "reason", 6: "message"},
+	"containerStatuses":    {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 7: "image", 8: "imageID", 9: "containerID", 10: "started"},
+	"initContainerStatuses": {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 7: "image", 8: "imageID", 9: "containerID", 10: "started"},
+	"claimRef":             {1: "kind", 2: "namespace", 3: "name", 4: "uid", 5: "apiVersion", 6: "resourceVersion", 7: "fieldPath"},
+	"subjects":             {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
+	"roleRef":              {1: "apiGroup", 2: "kind", 3: "name"},
+	"taints":               {1: "key", 2: "value", 3: "effect", 4: "timeAdded"},
+	"tolerations":          {1: "key", 2: "operator", 3: "value", 4: "effect", 5: "tolerationSeconds"},
+	"addresses":            {1: "type", 2: "address"},
+	"nodeInfo":             {1: "machineID", 2: "systemUUID", 3: "bootID", 4: "kernelVersion", 5: "osImage", 6: "containerRuntimeVersion", 7: "kubeletVersion", 8: "kubeProxyVersion", 9: "operatingSystem", 10: "architecture"},
+	"images":               {1: "names", 2: "sizeBytes"},
+	"strategy":             {1: "type", 2: "rollingUpdate"},
+	"updateStrategy":       {1: "type", 2: "rollingUpdate"},
+	"rules":                {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
+	"persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
+	"nfs":                  {1: "server", 2: "path", 3: "readOnly"},
+	"hostPath":             {1: "path", 2: "type"},
+	"local":                {1: "path", 2: "fsType"},
+	"csi":                  {1: "driver", 2: "volumeHandle", 3: "readOnly", 4: "fsType", 5: "volumeAttributes", 6: "controllerPublishSecretRef", 7: "nodeStageSecretRef", 8: "nodePublishSecretRef"},
+	"securityContext":      {1: "capabilities", 2: "privileged", 3: "seLinuxOptions", 4: "runAsUser", 7: "runAsNonRoot", 8: "readOnlyRootFilesystem", 15: "allowPrivilegeEscalation", 18: "runAsGroup", 21: "seccompProfile"},
+	"livenessProbe":        {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"readinessProbe":       {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"startupProbe":         {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
+	"handler":              {1: "exec", 2: "httpGet", 3: "tcpSocket"},
+	"exec":                 {1: "command"},
+	"httpGet":              {1: "path", 2: "port", 3: "host", 4: "scheme", 5: "httpHeaders"},
+	"tcpSocket":            {1: "port", 2: "host"},
+	"valueFrom":            {1: "fieldRef", 2: "resourceFieldRef", 3: "configMapKeyRef", 4: "secretKeyRef"},
+	"fieldRef":             {1: "apiVersion", 2: "fieldPath"},
+	"configMapKeyRef":      {1: "name", 2: "key", 3: "optional"},
+	"secretKeyRef":         {1: "name", 2: "key", 3: "optional"},
+	"matchExpressions":     {1: "key", 2: "operator", 3: "values"},
+	"drivers":              {1: "name", 2: "nodeID", 3: "topologyKeys", 4: "allocatable"},
+	"limits":               {1: "type", 2: "max", 3: "min", 4: "default", 5: "defaultRequest", 6: "maxLimitRequestRatio"},
+	"nodeAffinity":         {1: "required", 2: "preferred"},
+	"required":             {1: "nodeSelectorTerms"},
+	"preferred":            {1: "weight", 2: "preference"},
+	"nodeSelectorTerms":    {1: "matchExpressions", 2: "matchFields"},
+	"affinity":             {1: "nodeAffinity", 2: "podAffinity", 3: "podAntiAffinity"},
+	"rollingUpdate":        {1: "maxUnavailable", 2: "maxSurge"},
+	"daemonEndpoints":      {1: "kubeletEndpoint"},
+	"kubeletEndpoint":      {1: "port"},
+	"imagePullSecrets":     {1: "name"},
+	"secrets":              {1: "name", 2: "namespace"},
+	"tls":                  {1: "hosts", 2: "secretName"},
+	"jobTemplate":          {1: "metadata", 2: "spec"},
 }
 
 type ParsedKey struct {
@@ -304,6 +457,163 @@ func parseObjectMeta(data []byte) map[string]interface{} {
 	return meta
 }
 
+func isLikelyString(data []byte) bool {
+	if len(data) == 0 {
+		return true
+	}
+	if !utf8.Valid(data) {
+		return false
+	}
+	for _, b := range data {
+		if b < 0x20 && b != '\n' && b != '\r' && b != '\t' {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeGenericField(f ProtoField, pathPrefix string, depth int) interface{} {
+	switch f.WireType {
+	case 0:
+		return f.Varint
+	case 1:
+		return f.Fixed64
+	case 2:
+		sub, err := parseProtoMessage(f.Bytes)
+		if err == nil && len(sub) > 0 {
+			return decodeProtoFields(f.Bytes, nil, pathPrefix, depth+1)
+		}
+		if isLikelyString(f.Bytes) {
+			return string(f.Bytes)
+		}
+		return base64.StdEncoding.EncodeToString(f.Bytes)
+	case 5:
+		return f.Fixed32
+	}
+	return nil
+}
+
+func isMapEntries(entries []ProtoField) bool {
+	if len(entries) == 0 {
+		return false
+	}
+	for _, e := range entries {
+		if e.WireType != 2 {
+			return false
+		}
+		ef, err := parseProtoMessage(e.Bytes)
+		if err != nil || len(ef) != 2 {
+			return false
+		}
+		f1, ok1 := ef[1]
+		_, ok2 := ef[2]
+		if !ok1 || !ok2 || len(f1) != 1 || f1[0].WireType != 2 {
+			return false
+		}
+		if !isLikelyString(f1[0].Bytes) {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, depth int) interface{} {
+	if depth > 8 {
+		if isLikelyString(data) {
+			return string(data)
+		}
+		return base64.StdEncoding.EncodeToString(data)
+	}
+
+	fields, err := parseProtoMessage(data)
+	if err != nil || len(fields) == 0 {
+		if isLikelyString(data) {
+			return string(data)
+		}
+		return base64.StdEncoding.EncodeToString(data)
+	}
+
+	// Detect timestamp pattern (field 1=seconds, optional field 2=nanos)
+	if len(fields) <= 2 {
+		if f1, ok := fields[1]; ok && len(f1) == 1 && f1[0].WireType == 0 {
+			seconds := int64(f1[0].Varint)
+			if seconds > 946684800 && seconds < 2524608000 {
+				var nanos int64
+				if f2, ok := fields[2]; ok && len(f2) > 0 && f2[0].WireType == 0 {
+					nanos = int64(f2[0].Varint)
+				}
+				return time.Unix(seconds, nanos).UTC().Format(time.RFC3339)
+			}
+		}
+	}
+
+	// Detect Quantity-like wrapper: single field 1 that is a string (e.g. "20Gi", "100m")
+	if len(fields) == 1 {
+		if f1, ok := fields[1]; ok && len(f1) == 1 && f1[0].WireType == 2 && isLikelyString(f1[0].Bytes) {
+			return string(f1[0].Bytes)
+		}
+	}
+
+	result := make(map[string]interface{})
+	for num, entries := range fields {
+		key := fmt.Sprintf("field_%d", num)
+		if names != nil {
+			if name, ok := names[num]; ok {
+				key = name
+			}
+		}
+
+		childPath := pathPrefix
+		if key != fmt.Sprintf("field_%d", num) && pathPrefix != "" {
+			childPath = pathPrefix + "." + key
+		} else if key != fmt.Sprintf("field_%d", num) {
+			childPath = key
+		}
+
+		// Look up child field names: first try k8sFieldNames by path, then commonFieldNames by field name
+		var childNames map[int]string
+		if childPath != "" {
+			childNames = k8sFieldNames[childPath]
+		}
+		if childNames == nil && key != fmt.Sprintf("field_%d", num) {
+			childNames = commonFieldNames[key]
+		}
+
+		if childNames == nil && isMapEntries(entries) {
+			m := make(map[string]interface{})
+			for _, e := range entries {
+				ef, _ := parseProtoMessage(e.Bytes)
+				k := protoString(ef, 1)
+				if k != "" && len(ef[2]) > 0 {
+					m[k] = decodeGenericField(ef[2][0], childPath, depth+1)
+				}
+			}
+			result[key] = m
+		} else if len(entries) == 1 {
+			if entries[0].WireType == 2 && childNames != nil {
+				result[key] = decodeProtoFields(entries[0].Bytes, childNames, childPath, depth+1)
+			} else {
+				result[key] = decodeGenericField(entries[0], childPath, depth)
+			}
+		} else {
+			var vals []interface{}
+			for _, e := range entries {
+				if e.WireType == 2 && childNames != nil {
+					vals = append(vals, decodeProtoFields(e.Bytes, childNames, childPath, depth+1))
+				} else {
+					vals = append(vals, decodeGenericField(e, childPath, depth))
+				}
+			}
+			result[key] = vals
+		}
+	}
+	return result
+}
+
+func decodeGenericProto(data []byte, depth int) interface{} {
+	return decodeProtoFields(data, nil, "", depth)
+}
+
 func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 	if len(data) < 4 || string(data[:4]) != "k8s\x00" {
 		return nil, fmt.Errorf("not k8s protobuf format")
@@ -332,6 +642,15 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 	// Raw object (field 2)
 	rawBytes := protoBytes(wrapperFields, 2)
 	if rawBytes == nil {
+		return result, nil
+	}
+
+	// Try JSON decode on raw inner content
+	var jsonObj map[string]interface{}
+	if json.Unmarshal(rawBytes, &jsonObj) == nil {
+		for k, v := range jsonObj {
+			result[k] = v
+		}
 		return result, nil
 	}
 
@@ -382,6 +701,45 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 		if v := protoString(innerFields, 3); v != "" {
 			result["type"] = v
 		}
+
+	default:
+		topNames := k8sFieldNames[kind]
+		for fieldNum, entries := range innerFields {
+			if fieldNum == 1 {
+				continue
+			}
+			key := fmt.Sprintf("field_%d", fieldNum)
+			if topNames != nil {
+				if name, ok := topNames[fieldNum]; ok {
+					key = name
+				}
+			} else if fieldNum == 2 {
+				key = "spec"
+			} else if fieldNum == 3 {
+				key = "status"
+			}
+
+			sectionPath := kind + "." + key
+			sectionNames := k8sFieldNames[sectionPath]
+
+			if len(entries) == 1 {
+				if entries[0].WireType == 2 && sectionNames != nil {
+					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, sectionPath, 0)
+				} else {
+					result[key] = decodeGenericField(entries[0], sectionPath, 0)
+				}
+			} else {
+				var vals []interface{}
+				for _, e := range entries {
+					if e.WireType == 2 && sectionNames != nil {
+						vals = append(vals, decodeProtoFields(e.Bytes, sectionNames, sectionPath, 0))
+					} else {
+						vals = append(vals, decodeGenericField(e, sectionPath, 0))
+					}
+				}
+				result[key] = vals
+			}
+		}
 	}
 
 	return result, nil
@@ -423,16 +781,12 @@ func parseEtcdV3Value(value []byte) (string, map[string]interface{}, error) {
 }
 
 func parseEtcdPath(path string) ParsedKey {
-	// Path format: /kubernetes.io/<resource>/<namespace>/<name>
-	// or: /kubernetes.io/<group>/<resource>/<namespace>/<name>
-
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 
 	if len(parts) < 2 {
 		return ParsedKey{FullPath: path}
 	}
 
-	// Skip known prefixes
 	startIdx := 0
 	if parts[0] == "kubernetes.io" || parts[0] == "registry" {
 		startIdx = 1
@@ -442,49 +796,44 @@ func parseEtcdPath(path string) ParsedKey {
 		return ParsedKey{FullPath: path}
 	}
 
-	// Determine resource type
-	resource := ""
-	namespaceIdx := -1
-	nameIdx := -1
-
-	// Simple resources: /kubernetes.io/<resource>/<namespace>/<name>
-	// or /kubernetes.io/<resource>/<name> for cluster-scoped
-	if len(parts) > startIdx {
-		resource = parts[startIdx]
-	}
-
-	// Check if next part looks like a group (contains dots)
-	if startIdx+1 < len(parts) && strings.Contains(parts[startIdx+1], ".") {
-		// This is a group: /kubernetes.io/<group>/<resource>/...
-		if startIdx+2 < len(parts) {
-			resource = parts[startIdx+2]
-		}
-		namespaceIdx = startIdx + 3
-		nameIdx = startIdx + 4
-	} else {
-		// No group: /kubernetes.io/<resource>/...
-		namespaceIdx = startIdx + 1
-		nameIdx = startIdx + 2
-	}
-
+	remaining := parts[startIdx:]
 	result := ParsedKey{
-		Resource: resource,
+		Resource: remaining[0],
 		FullPath: path,
 	}
 
-	// Determine if cluster-scoped
-	if clusterScopedResources[resource] {
-		// Cluster-scoped: name comes directly after resource
-		if namespaceIdx < len(parts) {
-			result.Name = parts[namespaceIdx]
+	if strings.Contains(remaining[0], ".") {
+		// API group path: <group>/<resource>/[<namespace>/]<name>
+		if len(remaining) >= 2 {
+			result.Resource = remaining[0] + "/" + remaining[1]
+		}
+		// Use segment count: 3 = cluster-scoped, 4 = namespaced
+		switch len(remaining) {
+		case 3:
+			result.Name = remaining[2]
+		case 4:
+			result.Namespace = remaining[2]
+			result.Name = remaining[3]
+		default:
+			if len(remaining) >= 5 {
+				result.Namespace = remaining[2]
+				result.Name = remaining[3]
+			}
 		}
 	} else {
-		// Namespaced resource
-		if namespaceIdx < len(parts) {
-			result.Namespace = parts[namespaceIdx]
-		}
-		if nameIdx < len(parts) {
-			result.Name = parts[nameIdx]
+		// Core resource path: <resource>/[<namespace>/]<name>
+		// Use segment count: 2 = cluster-scoped, 3+ = namespaced
+		switch len(remaining) {
+		case 2:
+			result.Name = remaining[1]
+		case 3:
+			result.Namespace = remaining[1]
+			result.Name = remaining[2]
+		default:
+			if len(remaining) >= 4 {
+				result.Namespace = remaining[1]
+				result.Name = remaining[2]
+			}
 		}
 	}
 
@@ -691,6 +1040,334 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 	return nil
 }
 
+// Web GUI server
+
+type webServer struct {
+	dbPath string
+	mu     sync.RWMutex
+}
+
+func (ws *webServer) jsonResponse(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func (ws *webServer) handleStatus(w http.ResponseWriter, r *http.Request) {
+	ws.mu.RLock()
+	defer ws.mu.RUnlock()
+	ws.jsonResponse(w, map[string]interface{}{"loaded": ws.dbPath != "", "path": ws.dbPath})
+}
+
+func (ws *webServer) handleLoad(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		http.Error(w, "File not found: "+req.Path, http.StatusBadRequest)
+		return
+	}
+	db, err := bolt.Open(req.Path, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	if err != nil {
+		http.Error(w, "Invalid etcd database: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	db.Close()
+
+	ws.mu.Lock()
+	ws.dbPath = req.Path
+	ws.mu.Unlock()
+
+	ws.jsonResponse(w, map[string]interface{}{"success": true, "path": req.Path})
+}
+
+func (ws *webServer) handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.ParseMultipartForm(512 << 20) // 512MB max
+	file, header, err := r.FormFile("dbfile")
+	if err != nil {
+		http.Error(w, "Failed to read uploaded file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	tmpDir, err := os.MkdirTemp("", "etcd-extract-*")
+	if err != nil {
+		http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
+		return
+	}
+
+	tmpPath := filepath.Join(tmpDir, header.Filename)
+	dst, err := os.Create(tmpPath)
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+
+	if _, err := io.Copy(dst, file); err != nil {
+		dst.Close()
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Failed to save file", http.StatusInternalServerError)
+		return
+	}
+	dst.Close()
+
+	db, err := bolt.Open(tmpPath, 0600, &bolt.Options{ReadOnly: true, Timeout: 5 * time.Second})
+	if err != nil {
+		os.RemoveAll(tmpDir)
+		http.Error(w, "Invalid etcd database: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	db.Close()
+
+	ws.mu.Lock()
+	ws.dbPath = tmpPath
+	ws.mu.Unlock()
+
+	ws.jsonResponse(w, map[string]interface{}{"success": true, "filename": header.Filename, "path": tmpPath})
+}
+
+func (ws *webServer) withDB(w http.ResponseWriter, fn func(dbPath string)) {
+	ws.mu.RLock()
+	dbPath := ws.dbPath
+	ws.mu.RUnlock()
+	if dbPath == "" {
+		http.Error(w, "No database loaded", http.StatusBadRequest)
+		return
+	}
+	fn(dbPath)
+}
+
+func (ws *webServer) handleNamespaces(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		nsSet := make(map[string]bool)
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Namespace != "" {
+					nsSet[parsed.Namespace] = true
+				}
+				return nil
+			})
+		})
+
+		var namespaces []string
+		for ns := range nsSet {
+			namespaces = append(namespaces, ns)
+		}
+		sort.Strings(namespaces)
+		ws.jsonResponse(w, map[string]interface{}{"namespaces": namespaces})
+	})
+}
+
+func (ws *webServer) handleResources(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		nsFilter := r.URL.Query().Get("namespace")
+
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		type resSummary struct {
+			Count      int  `json:"count"`
+			Namespaced bool `json:"namespaced"`
+		}
+		resMap := make(map[string]*resSummary)
+
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Resource == "" {
+					return nil
+				}
+				if nsFilter != "" && parsed.Namespace != nsFilter {
+					return nil
+				}
+				if _, exists := resMap[parsed.Resource]; !exists {
+					resMap[parsed.Resource] = &resSummary{}
+				}
+				resMap[parsed.Resource].Count++
+				if parsed.Namespace != "" {
+					resMap[parsed.Resource].Namespaced = true
+				}
+				return nil
+			})
+		})
+
+		type resInfo struct {
+			Name       string `json:"name"`
+			Count      int    `json:"count"`
+			Namespaced bool   `json:"namespaced"`
+		}
+		var resources []resInfo
+		for n, s := range resMap {
+			resources = append(resources, resInfo{Name: n, Count: s.Count, Namespaced: s.Namespaced})
+		}
+		sort.Slice(resources, func(i, j int) bool { return resources[i].Name < resources[j].Name })
+		ws.jsonResponse(w, map[string]interface{}{"resources": resources})
+	})
+}
+
+func (ws *webServer) handleObjects(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		resourceFilter := r.URL.Query().Get("resource")
+		nsFilter := r.URL.Query().Get("namespace")
+		if resourceFilter == "" {
+			http.Error(w, "resource parameter required", http.StatusBadRequest)
+			return
+		}
+
+		db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer db.Close()
+
+		type objEntry struct {
+			Key       string `json:"key"`
+			Namespace string `json:"namespace"`
+			Name      string `json:"name"`
+		}
+		var objects []objEntry
+
+		db.View(func(tx *bolt.Tx) error {
+			bucket := tx.Bucket([]byte("key"))
+			if bucket == nil {
+				return nil
+			}
+			return bucket.ForEach(func(key, value []byte) error {
+				path, _, err := parseEtcdV3Value(value)
+				if err != nil {
+					return nil
+				}
+				parsed := parseEtcdPath(path)
+				if parsed.Resource != resourceFilter {
+					return nil
+				}
+				if nsFilter != "" && parsed.Namespace != nsFilter {
+					return nil
+				}
+				objects = append(objects, objEntry{Key: parsed.FullPath, Namespace: parsed.Namespace, Name: parsed.Name})
+				return nil
+			})
+		})
+
+		sort.Slice(objects, func(i, j int) bool {
+			if objects[i].Namespace != objects[j].Namespace {
+				return objects[i].Namespace < objects[j].Namespace
+			}
+			return objects[i].Name < objects[j].Name
+		})
+		ws.jsonResponse(w, map[string]interface{}{"objects": objects})
+	})
+}
+
+func (ws *webServer) handleObject(w http.ResponseWriter, r *http.Request) {
+	ws.withDB(w, func(dbPath string) {
+		resourceFilter := r.URL.Query().Get("resource")
+		nsFilter := r.URL.Query().Get("namespace")
+		nameFilter := r.URL.Query().Get("name")
+		if resourceFilter == "" || nameFilter == "" {
+			http.Error(w, "resource and name parameters required", http.StatusBadRequest)
+			return
+		}
+
+		results, err := extractObjects(dbPath, resourceFilter, nsFilter, nameFilter, nsFilter == "")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if len(results) == 0 {
+			http.Error(w, "Object not found", http.StatusNotFound)
+			return
+		}
+
+		obj := results[0]
+
+		var yamlBuf strings.Builder
+		fmt.Fprintf(&yamlBuf, "# Key: %s\n", obj.Key)
+		if obj.Namespace != "" {
+			fmt.Fprintf(&yamlBuf, "# Namespace: %s\n", obj.Namespace)
+		}
+		fmt.Fprintf(&yamlBuf, "# Resource: %s\n# Name: %s\n---\n", obj.Resource, obj.Name)
+		yamlData, _ := yaml.Marshal(obj.Object)
+		yamlBuf.Write(yamlData)
+
+		jsonData, _ := json.MarshalIndent(obj.Object, "", "  ")
+
+		ws.jsonResponse(w, map[string]interface{}{
+			"key":       obj.Key,
+			"resource":  obj.Resource,
+			"namespace": obj.Namespace,
+			"name":      obj.Name,
+			"yaml":      yamlBuf.String(),
+			"json":      string(jsonData),
+		})
+	})
+}
+
+func startWebServer(dbPath, listenPort string) {
+	ws := &webServer{dbPath: dbPath}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/status", ws.handleStatus)
+	mux.HandleFunc("/api/load", ws.handleLoad)
+	mux.HandleFunc("/api/upload", ws.handleUpload)
+	mux.HandleFunc("/api/namespaces", ws.handleNamespaces)
+	mux.HandleFunc("/api/resources", ws.handleResources)
+	mux.HandleFunc("/api/objects", ws.handleObjects)
+	mux.HandleFunc("/api/object", ws.handleObject)
+
+	subFS, _ := fs.Sub(webFS, "web")
+	mux.Handle("/", http.FileServer(http.FS(subFS)))
+
+	addr := ":" + listenPort
+	fmt.Fprintf(os.Stderr, "Starting etcd-extract web GUI at http://localhost%s\n", addr)
+	if dbPath != "" {
+		fmt.Fprintf(os.Stderr, "Database: %s\n", dbPath)
+	}
+	log.Fatal(http.ListenAndServe(addr, mux))
+}
+
 func reorderArgs() {
 	var flags, positional []string
 	args := os.Args[1:]
@@ -758,7 +1435,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  # Extract all namespaces (cluster-scoped resource)\n")
 		fmt.Fprintf(os.Stderr, "  %s --resource namespaces db.etcd\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  # Extract as JSON instead of YAML\n")
-		fmt.Fprintf(os.Stderr, "  %s --resource configmaps --ns default --output json db.etcd\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --resource configmaps --ns default --output json db.etcd\n\n", os.Args[0])
+
+		fmt.Fprintf(os.Stderr, "  Web GUI:\n\n")
+		fmt.Fprintf(os.Stderr, "  # Start web GUI with a database\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve db.etcd\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Start web GUI on a custom port\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve --port 9090 db.etcd\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Start web GUI (load database via UI)\n")
+		fmt.Fprintf(os.Stderr, "  %s --serve\n", os.Args[0])
 	}
 
 	reorderArgs()
@@ -784,6 +1469,16 @@ func main() {
 		*allNamespaces = true
 	}
 
+	// Handle serve mode
+	if *serve {
+		initialDB := ""
+		if flag.NArg() >= 1 {
+			initialDB = flag.Arg(0)
+		}
+		startWebServer(initialDB, *port)
+		return
+	}
+
 	// Get database file path
 	if flag.NArg() < 1 {
 		fmt.Fprintf(os.Stderr, "Error: database file required\n\n")
@@ -792,6 +1487,10 @@ func main() {
 	}
 
 	dbPath := flag.Arg(0)
+
+	if flag.NArg() >= 2 && *name == "" {
+		*name = flag.Arg(1)
+	}
 
 	// Check if file exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
