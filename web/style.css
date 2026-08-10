@@ -41,10 +41,29 @@ body {
 }
 
 .brand {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: var(--blue);
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     white-space: nowrap;
+}
+
+.brand-icon {
+    width: 30px;
+    height: 30px;
+    color: var(--blue);
+    flex-shrink: 0;
+}
+
+.brand-text {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #e2e8f0;
+}
+
+.brand-accent {
+    color: var(--blue);
+    font-weight: 600;
 }
 
 .db-info {
