@@ -76,17 +76,350 @@ var podSpecFields = map[int]string{
 
 var podTemplateFields = map[int]string{1: "metadata", 2: "spec"}
 
+var containerFields = map[int]string{
+	1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir",
+	6: "ports", 7: "env", 8: "resources", 9: "volumeMounts",
+	10: "livenessProbe", 11: "readinessProbe", 12: "lifecycle",
+	13: "terminationMessagePath", 14: "imagePullPolicy", 15: "securityContext",
+	16: "stdin", 17: "stdinOnce", 18: "tty", 19: "envFrom",
+	20: "terminationMessagePolicy", 21: "volumeDevices", 22: "startupProbe",
+	23: "resizePolicy", 24: "restartPolicy",
+}
+
+var containerPortFields = map[int]string{
+	1: "name", 2: "hostPort", 3: "containerPort", 4: "protocol", 5: "hostIP",
+}
+
+var envVarFields = map[int]string{1: "name", 2: "value", 3: "valueFrom"}
+
+var envVarSourceFields = map[int]string{
+	1: "fieldRef", 2: "resourceFieldRef", 3: "configMapKeyRef", 4: "secretKeyRef",
+}
+
+var fieldRefFields = map[int]string{1: "apiVersion", 2: "fieldPath"}
+
+var configMapKeyRefFields = map[int]string{1: "name", 2: "key", 3: "optional"}
+
+var secretKeyRefFields = map[int]string{1: "name", 2: "key", 3: "optional"}
+
+var volumeMountFields = map[int]string{
+	1: "name", 2: "readOnly", 3: "mountPath", 4: "subPath",
+	5: "mountPropagation", 6: "subPathExpr", 7: "recursiveReadOnly",
+}
+
+var resourceRequirementsFields = map[int]string{1: "limits", 2: "requests"}
+
+var probeFields = map[int]string{
+	1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds",
+	4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold",
+}
+
+var probeHandlerFields = map[int]string{1: "exec", 2: "httpGet", 3: "tcpSocket"}
+
+var execActionFields = map[int]string{1: "command"}
+
+var httpGetFields = map[int]string{
+	1: "path", 2: "port", 3: "host", 4: "scheme", 5: "httpHeaders",
+}
+
+var tcpSocketFields = map[int]string{1: "port", 2: "host"}
+
+var containerSecurityContextFields = map[int]string{
+	1: "capabilities", 2: "privileged", 3: "seLinuxOptions", 4: "runAsUser",
+	6: "procMount", 7: "runAsNonRoot", 8: "readOnlyRootFilesystem", 10: "windowsOptions",
+	11: "seccompProfile", 15: "allowPrivilegeEscalation", 18: "runAsGroup", 22: "appArmorProfile",
+}
+
+var capabilitiesFields = map[int]string{1: "add", 2: "drop"}
+
+var seLinuxOptionsFields = map[int]string{1: "user", 2: "role", 3: "type", 4: "level"}
+
+var seccompProfileFields = map[int]string{1: "type", 2: "localhostProfile"}
+
+var appArmorProfileFields = map[int]string{1: "type", 2: "localhostProfile"}
+
+var podSecurityContextFields = map[int]string{
+	1: "seLinuxOptions", 2: "runAsUser", 3: "runAsNonRoot",
+	4: "supplementalGroups", 5: "fsGroup", 6: "runAsGroup",
+	7: "sysctls", 9: "fsGroupChangePolicy", 10: "seccompProfile",
+	11: "appArmorProfile",
+}
+
+var envFromSourceFields = map[int]string{1: "prefix", 2: "configMapRef", 3: "secretRef"}
+
+var configMapEnvSourceFields = map[int]string{1: "name", 2: "optional"}
+
+var secretEnvSourceFields = map[int]string{1: "name", 2: "optional"}
+
+var lifecycleFields = map[int]string{1: "postStart", 2: "preStop"}
+
+var volumeFields = map[int]string{1: "name", 2: "volumeSource"}
+
+var volumeSourceFields = map[int]string{
+	1: "hostPath", 2: "emptyDir", 3: "gcePersistentDisk", 4: "awsElasticBlockStore",
+	5: "gitRepo", 6: "secret", 7: "nfs", 8: "iscsi", 9: "glusterfs",
+	10: "persistentVolumeClaim", 11: "rbd", 12: "flexVolume", 13: "cinder",
+	14: "cephfs", 15: "flocker", 16: "downwardAPI", 17: "fc", 18: "azureFile",
+	19: "configMap", 20: "vsphereVolume", 22: "azureDisk", 26: "projected",
+	27: "storageos", 28: "csi", 29: "ephemeral", 30: "image",
+}
+
+var secretVolumeSourceFields = map[int]string{
+	1: "secretName", 2: "items", 3: "defaultMode", 4: "optional",
+}
+
+var configMapVolumeSourceFields = map[int]string{
+	1: "name", 2: "items", 3: "defaultMode", 4: "optional",
+}
+
+var keyToPathFields = map[int]string{1: "key", 2: "path", 3: "mode"}
+
+var projectedVolumeSourceFields = map[int]string{1: "sources", 2: "defaultMode"}
+
+var projectionFields = map[int]string{
+	1: "secret", 2: "downwardAPI", 3: "configMap", 4: "serviceAccountToken",
+}
+
+var serviceAccountTokenProjectionFields = map[int]string{
+	1: "audience", 2: "expirationSeconds", 3: "path",
+}
+
+var persistentVolumeClaimVolumeSourceFields = map[int]string{1: "claimName", 2: "readOnly"}
+
+var hostPathVolumeSourceFields = map[int]string{1: "path", 2: "type"}
+
+var nfsVolumeSourceFields = map[int]string{1: "server", 2: "path", 3: "readOnly"}
+
+var localVolumeSourceFields = map[int]string{1: "path", 2: "fsType"}
+
+var downwardAPIVolumeSourceFields = map[int]string{1: "items"}
+
+var downwardAPIVolumeFileFields = map[int]string{
+	1: "path", 2: "fieldRef", 3: "resourceFieldRef", 4: "mode",
+}
+
+var tolerationFields = map[int]string{
+	1: "key", 2: "operator", 3: "value", 4: "effect", 5: "tolerationSeconds",
+}
+
+var imagePullSecretFields = map[int]string{1: "name"}
+
+var affinityFields = map[int]string{1: "nodeAffinity", 2: "podAffinity", 3: "podAntiAffinity"}
+
+var nodeAffinityFields = map[int]string{1: "required", 2: "preferred"}
+
+var nodeSelectorFields = map[int]string{1: "nodeSelectorTerms"}
+
+var preferredSchedulingTermFields = map[int]string{1: "weight", 2: "preference"}
+
+var nodeSelectorTermFields = map[int]string{1: "matchExpressions", 2: "matchFields"}
+
+var nodeSelectorRequirementFields = map[int]string{1: "key", 2: "operator", 3: "values"}
+
+var topologySpreadConstraintFields = map[int]string{
+	1: "maxSkew", 2: "topologyKey", 3: "whenUnsatisfiable", 4: "labelSelector",
+	5: "minDomains", 6: "nodeAffinityPolicy", 7: "nodeTaintsPolicy", 8: "matchLabelKeys",
+}
+
+var labelSelectorFields = map[int]string{1: "matchLabels", 2: "matchExpressions"}
+
+var matchExpressionsFields = map[int]string{1: "key", 2: "operator", 3: "values"}
+
+var containerStatusFields = map[int]string{
+	1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount",
+	6: "image", 7: "imageID", 8: "containerID", 9: "started",
+	10: "allocatedResources", 11: "resources", 12: "volumeMounts", 13: "user",
+}
+
+var containerStateFields = map[int]string{1: "waiting", 2: "running", 3: "terminated"}
+
+var containerUserFields = map[int]string{1: "linux"}
+
+var linuxContainerUserFields = map[int]string{1: "uid", 2: "gid", 3: "supplementalGroups"}
+
+var volumeMountStatusFields = map[int]string{
+	1: "name", 2: "mountPath", 3: "readOnly", 4: "recursiveReadOnly",
+}
+
+var containerStateWaitingFields = map[int]string{1: "reason", 2: "message"}
+
+var containerStateRunningFields = map[int]string{1: "startedAt"}
+
+var containerStateTerminatedFields = map[int]string{
+	1: "exitCode", 2: "signal", 3: "reason", 4: "message",
+	5: "startedAt", 6: "finishedAt", 7: "containerID",
+}
+
+var podConditionFields = map[int]string{
+	1: "type", 2: "status", 3: "lastProbeTime", 4: "lastTransitionTime",
+	5: "reason", 6: "message", 7: "observedGeneration",
+}
+
+var nodeConditionFields = map[int]string{
+	1: "type", 2: "status", 3: "lastHeartbeatTime", 4: "lastTransitionTime",
+	5: "reason", 6: "message",
+}
+
+var replicaSetConditionFields = map[int]string{
+	1: "type", 2: "status", 3: "lastTransitionTime", 4: "reason", 5: "message",
+}
+
+var metaConditionFields = map[int]string{
+	1: "type", 2: "status", 3: "observedGeneration", 4: "lastTransitionTime",
+	5: "reason", 6: "message",
+}
+
+var flowControlConditionFields = map[int]string{
+	1: "type", 2: "status", 3: "lastTransitionTime", 4: "reason", 5: "message",
+}
+
+var deploymentStrategyFields = map[int]string{1: "type", 2: "rollingUpdate"}
+
+var deploymentRollingUpdateFields = map[int]string{1: "maxUnavailable", 2: "maxSurge"}
+
+var statefulSetRollingUpdateFields = map[int]string{1: "partition", 2: "maxUnavailable"}
+
+var policyRuleFields = map[int]string{
+	1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs",
+}
+
+var rbacSubjectFields = map[int]string{1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"}
+
+var roleRefFields = map[int]string{1: "apiGroup", 2: "kind", 3: "name"}
+
+var nodeAddressFields = map[int]string{1: "type", 2: "address"}
+
+var nodeInfoFields = map[int]string{
+	1: "machineID", 2: "systemUUID", 3: "bootID", 4: "kernelVersion",
+	5: "osImage", 6: "containerRuntimeVersion", 7: "kubeletVersion",
+	8: "kubeProxyVersion", 9: "operatingSystem", 10: "architecture",
+}
+
+var taintFields = map[int]string{1: "key", 2: "value", 3: "effect", 4: "timeAdded"}
+
+var daemonEndpointsFields = map[int]string{1: "kubeletEndpoint"}
+
+var kubeletEndpointFields = map[int]string{1: "port"}
+
+var nodeImageFields = map[int]string{1: "names", 2: "sizeBytes"}
+
+var runtimeHandlerFields = map[int]string{1: "name", 2: "features"}
+
+var runtimeHandlerFeaturesFields = map[int]string{1: "recursiveReadOnlyMounts", 2: "userNamespaces"}
+
+var nodeFeaturesFields = map[int]string{1: "supplementalGroupsPolicy"}
+
+var endpointSubsetFields = map[int]string{1: "addresses", 2: "notReadyAddresses", 3: "ports"}
+
+var endpointAddressFields = map[int]string{1: "ip", 2: "targetRef", 3: "hostname", 4: "nodeName"}
+
+var endpointPortFields = map[int]string{1: "name", 2: "port", 3: "protocol", 4: "appProtocol"}
+
+var servicePortFields = map[int]string{
+	1: "name", 2: "protocol", 3: "port", 4: "targetPort", 5: "nodePort",
+}
+
+var intOrStringFields = map[int]string{1: "type", 2: "intVal", 3: "strVal"}
+
+var objectMetaFields = map[int]string{
+	1: "name", 2: "generateName", 3: "namespace", 4: "selfLink", 5: "uid",
+	6: "resourceVersion", 7: "generation", 8: "creationTimestamp",
+	9: "deletionTimestamp", 10: "deletionGracePeriodSeconds",
+	11: "labels", 12: "annotations", 13: "ownerReferences", 14: "finalizers",
+}
+
+var configMapProjectionFields = map[int]string{1: "name", 2: "items", 3: "optional"}
+
+var secretProjectionFields = map[int]string{1: "name", 2: "items", 3: "optional"}
+
+var podAffinityFields = map[int]string{
+	1: "requiredDuringSchedulingIgnoredDuringExecution",
+	2: "preferredDuringSchedulingIgnoredDuringExecution",
+}
+
+var weightedPodAffinityTermFields = map[int]string{1: "weight", 2: "podAffinityTerm"}
+
+var podAffinityTermFields = map[int]string{
+	1: "labelSelector", 2: "namespaces", 3: "topologyKey",
+	4: "namespaceSelector", 5: "matchLabelKeys", 6: "mismatchLabelKeys",
+}
+
+var flowSchemaSubjectFields = map[int]string{
+	1: "kind", 2: "user", 3: "group", 4: "serviceAccount",
+}
+
+var priorityLevelConfigRefFields = map[int]string{1: "name"}
+
+var distinguisherMethodFields = map[int]string{1: "type"}
+
+var limitedFields = map[int]string{
+	1: "nominalConcurrencyShares", 2: "limitResponse",
+	3: "lendablePercent", 4: "borrowingLimitPercent",
+}
+
+var limitResponseFields = map[int]string{1: "type", 2: "queuing"}
+
+var queuingFields = map[int]string{1: "queues", 2: "handSize", 3: "queueLengthLimit"}
+
+var resourcePolicyRuleFields = map[int]string{
+	1: "verbs", 2: "apiGroups", 3: "resources", 4: "clusterScope", 5: "namespaces",
+}
+
+var nonResourcePolicyRuleFields = map[int]string{1: "verbs", 6: "nonResourceURLs"}
+
+var clientConfigFields = map[int]string{1: "service", 2: "caBundle", 3: "url"}
+
+var webhookServiceFields = map[int]string{1: "namespace", 2: "name", 3: "path", 4: "port"}
+
+var ruleFields = map[int]string{1: "apiGroups", 2: "apiVersions", 3: "resources", 4: "scope"}
+
+var csiNodeDriverFields = map[int]string{
+	1: "name", 2: "nodeID", 3: "topologyKeys", 4: "allocatable",
+}
+
+var csiPVSourceFields = map[int]string{
+	1: "driver", 2: "volumeHandle", 3: "readOnly", 4: "fsType",
+	5: "volumeAttributes", 6: "controllerPublishSecretRef",
+	7: "nodeStageSecretRef", 8: "nodePublishSecretRef",
+}
+
+var pvSourceFields = map[int]string{
+	1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath",
+	4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs",
+	14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi",
+}
+
+var objectReferenceFields = map[int]string{
+	1: "kind", 2: "namespace", 3: "name", 4: "uid",
+	5: "apiVersion", 6: "resourceVersion", 7: "fieldPath",
+}
+
+var jobSpecFields = map[int]string{
+	1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds",
+	4: "selector", 5: "manualSelector", 6: "template",
+	7: "backoffLimit", 8: "ttlSecondsAfterFinished",
+}
+
+var jobTemplateSpecFields = map[int]string{1: "metadata", 2: "spec"}
+
+var ingressTLSFields = map[int]string{1: "hosts", 2: "secretName"}
+
+var limitRangeItemFields = map[int]string{
+	1: "type", 2: "max", 3: "min", 4: "default",
+	5: "defaultRequest", 6: "maxLimitRequestRatio",
+}
+
 var k8sFieldNames = map[string]map[int]string{
 	"Namespace":                    {2: "spec", 3: "status"},
 	"Namespace.spec":               {1: "finalizers"},
 	"Namespace.status":             {1: "phase", 2: "conditions"},
 	"Node":                         {2: "spec", 3: "status"},
 	"Node.spec":                    {1: "podCIDR", 2: "externalID", 3: "providerID", 4: "unschedulable", 5: "taints", 7: "podCIDRs"},
-	"Node.status":                  {1: "capacity", 2: "allocatable", 3: "phase", 4: "conditions", 5: "addresses", 6: "daemonEndpoints", 7: "nodeInfo", 8: "images", 9: "volumesInUse", 10: "volumesAttached"},
+	"Node.status":                  {1: "capacity", 2: "allocatable", 3: "phase", 4: "conditions", 5: "addresses", 6: "daemonEndpoints", 7: "nodeInfo", 8: "images", 9: "volumesInUse", 10: "volumesAttached", 11: "config", 12: "runtimeHandlers", 13: "features"},
 	"PersistentVolume":             {2: "spec", 3: "status"},
 	"PersistentVolume.spec":                       {1: "capacity", 2: "persistentVolumeSource", 3: "accessModes", 4: "claimRef", 5: "persistentVolumeReclaimPolicy", 6: "storageClassName", 7: "mountOptions", 8: "volumeMode", 9: "nodeAffinity"},
 	"PersistentVolume.spec.persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
-	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason"},
+	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason", 4: "lastPhaseTransitionTime"},
 	"PersistentVolumeClaim":        {2: "spec", 3: "status"},
 	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode"},
 	"PersistentVolumeClaim.status": {1: "phase", 2: "accessModes", 3: "capacity", 4: "conditions"},
@@ -94,10 +427,10 @@ var k8sFieldNames = map[string]map[int]string{
 	"Pod.spec":                     podSpecFields,
 	"Pod.status":                   {1: "phase", 2: "conditions", 3: "message", 4: "reason", 5: "hostIP", 6: "podIP", 7: "startTime", 8: "containerStatuses", 9: "qosClass", 10: "initContainerStatuses", 11: "nominatedNodeName", 12: "podIPs", 13: "ephemeralContainerStatuses", 14: "resize", 16: "hostIPs", 17: "observedGeneration"},
 	"Deployment":                   {2: "spec", 3: "status"},
-	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 9: "progressDeadlineSeconds"},
+	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 7: "paused", 9: "progressDeadlineSeconds"},
 	"Deployment.spec.template":     podTemplateFields,
 	"Deployment.spec.template.spec": podSpecFields,
-	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "readyReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "availableReplicas"},
+	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "availableReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "readyReplicas", 8: "collisionCount"},
 	"Deployment.status.conditions": {1: "type", 2: "status", 4: "reason", 5: "message", 6: "lastUpdateTime", 7: "lastTransitionTime"},
 	"ReplicaSet":                   {2: "spec", 3: "status"},
 	"ReplicaSet.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
@@ -115,10 +448,14 @@ var k8sFieldNames = map[string]map[int]string{
 	"StatefulSet.spec.template.spec": podSpecFields,
 	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 9: "conditions", 10: "availableReplicas"},
 	"Service":                      {2: "spec", 3: "status"},
-	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 14: "ipFamilies", 15: "ipFamilyPolicy", 19: "clusterIPs"},
+	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 8: "sessionAffinityConfig", 9: "loadBalancerSourceRanges", 10: "externalName", 11: "externalTrafficPolicy", 12: "healthCheckNodePort", 13: "publishNotReadyAddresses", 17: "ipFamilyPolicy", 18: "clusterIPs", 19: "ipFamilies", 22: "internalTrafficPolicy", 23: "allocateLoadBalancerNodePorts", 24: "loadBalancerClass", 25: "trafficDistribution"},
 	"Service.spec.ports":           {1: "name", 2: "protocol", 3: "port", 4: "targetPort", 5: "nodePort"},
 	"Service.status":               {1: "loadBalancer", 2: "conditions"},
-	"Endpoints":                    {2: "subsets"},
+	"Endpoints":                          {2: "subsets"},
+	"Endpoints.subsets":                   {1: "addresses", 2: "notReadyAddresses", 3: "ports"},
+	"Endpoints.subsets.addresses":         {1: "ip", 2: "targetRef", 3: "hostname", 4: "nodeName"},
+	"Endpoints.subsets.notReadyAddresses": {1: "ip", 2: "targetRef", 3: "hostname", 4: "nodeName"},
+	"Endpoints.subsets.ports":             {1: "name", 2: "port", 3: "protocol", 4: "appProtocol"},
 	"Job":                          {2: "spec", 3: "status"},
 	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished"},
 	"Job.spec.template":            podTemplateFields,
@@ -142,87 +479,305 @@ var k8sFieldNames = map[string]map[int]string{
 	"RoleBinding.roleRef":          {1: "apiGroup", 2: "kind", 3: "name"},
 	"ServiceAccount":               {2: "secrets", 3: "imagePullSecrets", 4: "automountServiceAccountToken"},
 	"StorageClass":                 {2: "provisioner", 3: "parameters", 4: "reclaimPolicy", 5: "mountOptions", 6: "allowVolumeExpansion", 7: "volumeBindingMode", 8: "allowedTopologies"},
-	"CSINode":                      {2: "spec"},
-	"CSINode.spec":                 {1: "drivers"},
+	"CSINode":                            {2: "spec"},
+	"CSINode.spec":                       {1: "drivers"},
+	"CSINode.spec.drivers.allocatable":   {1: "count"},
+	"CSIDriver":                    {2: "spec"},
+	"CSIDriver.spec":               {1: "attachRequired", 2: "podInfoOnMount", 3: "volumeLifecycleModes", 4: "storageCapacity", 5: "fsGroupPolicy", 6: "tokenRequests", 7: "requiresRepublish", 8: "seLinuxMount", 9: "nodeAllocatableUpdatePeriodSeconds"},
+	"PriorityClass":                {2: "value", 3: "globalDefault", 4: "description", 5: "preemptionPolicy"},
+	"IngressClass":                 {2: "spec"},
+	"IngressClass.spec":            {1: "controller", 2: "parameters"},
+	"IngressClass.spec.parameters": {1: "apiGroup", 2: "kind", 3: "name", 4: "scope", 5: "namespace"},
+	"FlowSchema":                   {2: "spec", 3: "status"},
+	"FlowSchema.spec":              {1: "priorityLevelConfiguration", 2: "matchingPrecedence", 3: "distinguisherMethod", 4: "rules"},
+	"FlowSchema.spec.rules":        {1: "subjects", 2: "resourceRules", 3: "nonResourceRules"},
+	"FlowSchema.status":            {1: "conditions"},
+	"PriorityLevelConfiguration":          {2: "spec", 3: "status"},
+	"PriorityLevelConfiguration.spec":     {1: "type", 2: "limited", 3: "exempt"},
+	"PriorityLevelConfiguration.status":   {1: "conditions"},
+	"PriorityLevelConfiguration.spec.exempt": {1: "nominalConcurrencyShares", 2: "lendablePercent"},
+	"ValidatingWebhookConfiguration":              {2: "webhooks"},
+	"ValidatingWebhookConfiguration.webhooks":          {1: "name", 2: "clientConfig", 3: "rules", 4: "failurePolicy", 5: "namespaceSelector", 6: "sideEffects", 7: "timeoutSeconds", 8: "admissionReviewVersions", 9: "matchPolicy", 10: "objectSelector", 11: "matchConditions"},
+	"ValidatingWebhookConfiguration.webhooks.rules":    {1: "operations", 2: "rule"},
+	"ValidatingWebhookConfiguration.webhooks.rules.rule": {1: "apiGroups", 2: "apiVersions", 3: "resources", 4: "scope"},
+	"MutatingWebhookConfiguration":                {2: "webhooks"},
+	"MutatingWebhookConfiguration.webhooks":            {1: "name", 2: "clientConfig", 3: "rules", 4: "failurePolicy", 5: "namespaceSelector", 6: "sideEffects", 7: "timeoutSeconds", 8: "admissionReviewVersions", 9: "matchPolicy", 10: "reinvocationPolicy", 11: "objectSelector", 12: "matchConditions"},
+	"MutatingWebhookConfiguration.webhooks.rules":      {1: "operations", 2: "rule"},
+	"MutatingWebhookConfiguration.webhooks.rules.rule": {1: "apiGroups", 2: "apiVersions", 3: "resources", 4: "scope"},
 	"LimitRange":                   {2: "spec"},
 	"ResourceQuota":                {2: "spec", 3: "status"},
 }
 
-var commonFieldNames = map[string]map[int]string{
-	"containers":           {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 12: "lifecycle", 13: "terminationMessagePath", 14: "imagePullPolicy", 15: "securityContext", 16: "stdin", 17: "stdinOnce", 18: "tty", 19: "envFrom", 20: "terminationMessagePolicy", 21: "volumeDevices", 22: "startupProbe", 23: "resizePolicy", 24: "restartPolicy"},
-	"initContainers":       {1: "name", 2: "image", 3: "command", 4: "args", 5: "workingDir", 6: "ports", 7: "env", 8: "resources", 9: "volumeMounts", 10: "livenessProbe", 11: "readinessProbe", 12: "lifecycle", 13: "terminationMessagePath", 14: "imagePullPolicy", 15: "securityContext", 16: "stdin", 17: "stdinOnce", 18: "tty", 19: "envFrom", 20: "terminationMessagePolicy", 21: "volumeDevices", 22: "startupProbe", 23: "resizePolicy", 24: "restartPolicy"},
-	"template":             podTemplateFields,
-	"selector":             {1: "matchLabels", 2: "matchExpressions"},
-	"ports":                {1: "name", 2: "hostPort", 3: "containerPort", 4: "protocol", 5: "hostIP"},
-	"env":                  {1: "name", 2: "value", 3: "valueFrom"},
-	"volumeMounts":         {1: "name", 2: "readOnly", 3: "mountPath", 4: "subPath", 5: "mountPropagation", 6: "subPathExpr", 7: "recursiveReadOnly"},
-	"volumes":              {1: "name", 2: "volumeSource"},
-	"volumeSource":         {1: "hostPath", 2: "emptyDir", 3: "gcePersistentDisk", 4: "awsElasticBlockStore", 5: "gitRepo", 6: "secret", 7: "nfs", 8: "iscsi", 9: "glusterfs", 10: "persistentVolumeClaim", 11: "rbd", 12: "flexVolume", 13: "cinder", 14: "cephfs", 15: "flocker", 16: "downwardAPI", 17: "fc", 18: "azureFile", 19: "configMap", 20: "vsphereVolume", 22: "azureDisk", 26: "projected", 27: "storageos", 28: "csi", 29: "ephemeral", 30: "image"},
-	"secret":               {1: "secretName", 2: "items", 3: "defaultMode", 4: "optional"},
-	"configMap":            {1: "name", 2: "items", 3: "defaultMode", 4: "optional"},
-	"projected":            {1: "sources", 2: "defaultMode"},
-	"sources":              {1: "secret", 2: "downwardAPI", 3: "configMap", 4: "serviceAccountToken"},
-	"serviceAccountToken":  {1: "audience", 2: "expirationSeconds", 3: "path"},
-	"persistentVolumeClaim": {1: "claimName", 2: "readOnly"},
-	"items":                {1: "key", 2: "path", 3: "mode"},
-	"downwardAPI":          {1: "items"},
-	"resources":            {1: "limits", 2: "requests"},
-	"conditions":           {1: "type", 2: "status", 3: "lastProbeTime", 4: "lastTransitionTime", 5: "reason", 6: "message", 7: "observedGeneration"},
-	"containerStatuses":    {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 6: "image", 7: "imageID", 8: "containerID", 9: "started", 10: "allocatedResources", 11: "resources", 12: "volumeMounts", 13: "user"},
-	"initContainerStatuses": {1: "name", 2: "state", 3: "lastState", 4: "ready", 5: "restartCount", 6: "image", 7: "imageID", 8: "containerID", 9: "started", 10: "allocatedResources", 11: "resources", 12: "volumeMounts", 13: "user"},
-	"claimRef":             {1: "kind", 2: "namespace", 3: "name", 4: "uid", 5: "apiVersion", 6: "resourceVersion", 7: "fieldPath"},
-	"subjects":             {1: "kind", 2: "apiGroup", 3: "name", 4: "namespace"},
-	"roleRef":              {1: "apiGroup", 2: "kind", 3: "name"},
-	"taints":               {1: "key", 2: "value", 3: "effect", 4: "timeAdded"},
-	"tolerations":          {1: "key", 2: "operator", 3: "value", 4: "effect", 5: "tolerationSeconds"},
-	"addresses":            {1: "type", 2: "address"},
-	"nodeInfo":             {1: "machineID", 2: "systemUUID", 3: "bootID", 4: "kernelVersion", 5: "osImage", 6: "containerRuntimeVersion", 7: "kubeletVersion", 8: "kubeProxyVersion", 9: "operatingSystem", 10: "architecture"},
-	"images":               {1: "names", 2: "sizeBytes"},
-	"strategy":             {1: "type", 2: "rollingUpdate"},
-	"updateStrategy":       {1: "type", 2: "rollingUpdate"},
-	"rules":                {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
-	"persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
-	"nfs":                  {1: "server", 2: "path", 3: "readOnly"},
-	"hostPath":             {1: "path", 2: "type"},
-	"local":                {1: "path", 2: "fsType"},
-	"csi":                  {1: "driver", 2: "volumeHandle", 3: "readOnly", 4: "fsType", 5: "volumeAttributes", 6: "controllerPublishSecretRef", 7: "nodeStageSecretRef", 8: "nodePublishSecretRef"},
-	"securityContext":      {1: "capabilities", 2: "privileged", 3: "seLinuxOptions", 4: "runAsUser", 7: "runAsNonRoot", 8: "readOnlyRootFilesystem", 15: "allowPrivilegeEscalation", 18: "runAsGroup", 21: "seccompProfile"},
-	"livenessProbe":        {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
-	"readinessProbe":       {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
-	"startupProbe":         {1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds", 4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold"},
-	"handler":              {1: "exec", 2: "httpGet", 3: "tcpSocket"},
-	"exec":                 {1: "command"},
-	"httpGet":              {1: "path", 2: "port", 3: "host", 4: "scheme", 5: "httpHeaders"},
-	"tcpSocket":            {1: "port", 2: "host"},
-	"valueFrom":            {1: "fieldRef", 2: "resourceFieldRef", 3: "configMapKeyRef", 4: "secretKeyRef"},
-	"fieldRef":             {1: "apiVersion", 2: "fieldPath"},
-	"configMapKeyRef":      {1: "name", 2: "key", 3: "optional"},
-	"secretKeyRef":         {1: "name", 2: "key", 3: "optional"},
-	"matchExpressions":     {1: "key", 2: "operator", 3: "values"},
-	"drivers":              {1: "name", 2: "nodeID", 3: "topologyKeys", 4: "allocatable"},
-	"limits":               {1: "type", 2: "max", 3: "min", 4: "default", 5: "defaultRequest", 6: "maxLimitRequestRatio"},
-	"nodeAffinity":         {1: "required", 2: "preferred"},
-	"required":             {1: "nodeSelectorTerms"},
-	"preferred":            {1: "weight", 2: "preference"},
-	"nodeSelectorTerms":    {1: "matchExpressions", 2: "matchFields"},
-	"affinity":             {1: "nodeAffinity", 2: "podAffinity", 3: "podAntiAffinity"},
-	"rollingUpdate":        {1: "maxUnavailable", 2: "maxSurge"},
-	"daemonEndpoints":      {1: "kubeletEndpoint"},
-	"kubeletEndpoint":      {1: "port"},
-	"imagePullSecrets":     {1: "name"},
-	"secrets":              {1: "name", 2: "namespace"},
-	"tls":                  {1: "hosts", 2: "secretName"},
-	"jobTemplate":          {1: "metadata", 2: "spec"},
-	"state":                {1: "waiting", 2: "running", 3: "terminated"},
-	"lastState":            {1: "waiting", 2: "running", 3: "terminated"},
-	"waiting":              {1: "reason", 2: "message"},
-	"running":              {1: "startedAt"},
-	"terminated":           {1: "exitCode", 2: "signal", 3: "reason", 4: "message", 5: "startedAt", 6: "finishedAt", 7: "containerID"},
-	"topologySpreadConstraints": {1: "maxSkew", 2: "topologyKey", 3: "whenUnsatisfiable", 4: "labelSelector", 5: "minDomains", 6: "nodeAffinityPolicy", 7: "nodeTaintsPolicy", 8: "matchLabelKeys"},
-	"envFrom":              {1: "prefix", 2: "configMapRef", 3: "secretRef"},
-	"configMapRef":         {1: "name", 2: "optional"},
-	"secretRef":            {1: "name", 2: "optional"},
-	"lifecycle":            {1: "postStart", 2: "preStop"},
+func init() {
+	podSpecPaths := []string{
+		"Pod.spec",
+		"Deployment.spec.template.spec",
+		"ReplicaSet.spec.template.spec",
+		"DaemonSet.spec.template.spec",
+		"StatefulSet.spec.template.spec",
+		"Job.spec.template.spec",
+		"CronJob.spec.jobTemplate.spec.template.spec",
+	}
+	for _, p := range podSpecPaths {
+		registerPodSpecChildren(p)
+	}
+
+	registerContainerStatusPaths("Pod.status")
+
+	// Template metadata sub-paths
+	templateMetaPaths := []string{
+		"Deployment.spec.template.metadata",
+		"ReplicaSet.spec.template.metadata",
+		"DaemonSet.spec.template.metadata",
+		"StatefulSet.spec.template.metadata",
+		"Job.spec.template.metadata",
+		"CronJob.spec.jobTemplate.spec.template.metadata",
+		"CronJob.spec.jobTemplate.metadata",
+	}
+	for _, p := range templateMetaPaths {
+		k8sFieldNames[p] = objectMetaFields
+	}
+
+	// CronJob jobTemplate sub-paths
+	k8sFieldNames["CronJob.spec.jobTemplate"] = jobTemplateSpecFields
+	k8sFieldNames["CronJob.spec.jobTemplate.spec"] = jobSpecFields
+	k8sFieldNames["CronJob.spec.jobTemplate.spec.template"] = podTemplateFields
+	k8sFieldNames["CronJob.spec.jobTemplate.spec.template.spec"] = podSpecFields
+	k8sFieldNames["CronJob.spec.jobTemplate.spec.selector"] = labelSelectorFields
+	k8sFieldNames["CronJob.spec.jobTemplate.spec.selector.matchExpressions"] = matchExpressionsFields
+
+	// Selector sub-paths
+	for _, p := range []string{
+		"Deployment.spec.selector",
+		"ReplicaSet.spec.selector",
+		"DaemonSet.spec.selector",
+		"StatefulSet.spec.selector",
+		"Job.spec.selector",
+		"PersistentVolumeClaim.spec.selector",
+	} {
+		k8sFieldNames[p] = labelSelectorFields
+		k8sFieldNames[p+".matchExpressions"] = matchExpressionsFields
+	}
+
+	// Strategy sub-paths
+	k8sFieldNames["Deployment.spec.strategy"] = deploymentStrategyFields
+	k8sFieldNames["Deployment.spec.strategy.rollingUpdate"] = deploymentRollingUpdateFields
+	k8sFieldNames["Deployment.spec.strategy.rollingUpdate.maxUnavailable"] = intOrStringFields
+	k8sFieldNames["Deployment.spec.strategy.rollingUpdate.maxSurge"] = intOrStringFields
+	k8sFieldNames["DaemonSet.spec.updateStrategy"] = deploymentStrategyFields
+	k8sFieldNames["DaemonSet.spec.updateStrategy.rollingUpdate"] = deploymentRollingUpdateFields
+	k8sFieldNames["DaemonSet.spec.updateStrategy.rollingUpdate.maxUnavailable"] = intOrStringFields
+	k8sFieldNames["DaemonSet.spec.updateStrategy.rollingUpdate.maxSurge"] = intOrStringFields
+	k8sFieldNames["StatefulSet.spec.updateStrategy"] = deploymentStrategyFields
+	k8sFieldNames["StatefulSet.spec.updateStrategy.rollingUpdate"] = statefulSetRollingUpdateFields
+	k8sFieldNames["StatefulSet.spec.updateStrategy.rollingUpdate.maxUnavailable"] = intOrStringFields
+
+	// Condition sub-paths (each type has different field layouts)
+	k8sFieldNames["Pod.status.conditions"] = podConditionFields
+	k8sFieldNames["Node.status.conditions"] = nodeConditionFields
+	k8sFieldNames["Namespace.status.conditions"] = metaConditionFields
+	k8sFieldNames["ReplicaSet.status.conditions"] = replicaSetConditionFields
+	k8sFieldNames["DaemonSet.status.conditions"] = replicaSetConditionFields
+	k8sFieldNames["StatefulSet.status.conditions"] = replicaSetConditionFields
+	k8sFieldNames["Job.status.conditions"] = podConditionFields
+	k8sFieldNames["PersistentVolumeClaim.status.conditions"] = podConditionFields
+	k8sFieldNames["FlowSchema.status.conditions"] = flowControlConditionFields
+	k8sFieldNames["PriorityLevelConfiguration.status.conditions"] = flowControlConditionFields
+	k8sFieldNames["Service.status.conditions"] = metaConditionFields
+
+	// RBAC sub-paths
+	k8sFieldNames["ClusterRole.rules"] = policyRuleFields
+	k8sFieldNames["Role.rules"] = policyRuleFields
+	for _, kind := range []string{"ClusterRoleBinding", "RoleBinding"} {
+		k8sFieldNames[kind+".subjects"] = rbacSubjectFields
+		k8sFieldNames[kind+".roleRef"] = roleRefFields
+	}
+
+	// Node sub-paths
+	k8sFieldNames["Node.spec.taints"] = taintFields
+	k8sFieldNames["Node.status.addresses"] = nodeAddressFields
+	k8sFieldNames["Node.status.nodeInfo"] = nodeInfoFields
+	k8sFieldNames["Node.status.images"] = nodeImageFields
+	k8sFieldNames["Node.status.daemonEndpoints"] = daemonEndpointsFields
+	k8sFieldNames["Node.status.daemonEndpoints.kubeletEndpoint"] = kubeletEndpointFields
+	k8sFieldNames["Node.status.runtimeHandlers"] = runtimeHandlerFields
+	k8sFieldNames["Node.status.runtimeHandlers.features"] = runtimeHandlerFeaturesFields
+	k8sFieldNames["Node.status.features"] = nodeFeaturesFields
+
+	// PersistentVolume sub-paths
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource"] = pvSourceFields
+	k8sFieldNames["PersistentVolume.spec.claimRef"] = objectReferenceFields
+	k8sFieldNames["PersistentVolume.spec.nodeAffinity"] = nodeAffinityFields
+	k8sFieldNames["PersistentVolume.spec.nodeAffinity.required"] = nodeSelectorFields
+	k8sFieldNames["PersistentVolume.spec.nodeAffinity.required.nodeSelectorTerms"] = nodeSelectorTermFields
+	k8sFieldNames["PersistentVolume.spec.nodeAffinity.required.nodeSelectorTerms.matchExpressions"] = nodeSelectorRequirementFields
+	k8sFieldNames["PersistentVolume.spec.nodeAffinity.required.nodeSelectorTerms.matchFields"] = nodeSelectorRequirementFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.nfs"] = nfsVolumeSourceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.hostPath"] = hostPathVolumeSourceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.local"] = localVolumeSourceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi"] = csiPVSourceFields
+
+	// PersistentVolumeClaim sub-paths
+	k8sFieldNames["PersistentVolumeClaim.spec.resources"] = resourceRequirementsFields
+
+	// Endpoints sub-paths
+	k8sFieldNames["Endpoints.subsets"] = endpointSubsetFields
+	k8sFieldNames["Endpoints.subsets.addresses"] = endpointAddressFields
+	k8sFieldNames["Endpoints.subsets.notReadyAddresses"] = endpointAddressFields
+	k8sFieldNames["Endpoints.subsets.ports"] = endpointPortFields
+
+	// Service sub-paths
+	k8sFieldNames["Service.spec.ports"] = servicePortFields
+	k8sFieldNames["Service.spec.ports.targetPort"] = intOrStringFields
+
+	// Ingress sub-paths
+	k8sFieldNames["Ingress.spec.tls"] = ingressTLSFields
+
+	// FlowSchema sub-paths
+	k8sFieldNames["FlowSchema.spec.priorityLevelConfiguration"] = priorityLevelConfigRefFields
+	k8sFieldNames["FlowSchema.spec.distinguisherMethod"] = distinguisherMethodFields
+	k8sFieldNames["FlowSchema.spec.rules.subjects"] = flowSchemaSubjectFields
+	k8sFieldNames["FlowSchema.spec.rules.resourceRules"] = resourcePolicyRuleFields
+	k8sFieldNames["FlowSchema.spec.rules.nonResourceRules"] = nonResourcePolicyRuleFields
+
+	// PriorityLevelConfiguration sub-paths
+	k8sFieldNames["PriorityLevelConfiguration.spec.limited"] = limitedFields
+	k8sFieldNames["PriorityLevelConfiguration.spec.limited.limitResponse"] = limitResponseFields
+	k8sFieldNames["PriorityLevelConfiguration.spec.limited.limitResponse.queuing"] = queuingFields
+
+	// Webhook sub-paths
+	for _, kind := range []string{"ValidatingWebhookConfiguration", "MutatingWebhookConfiguration"} {
+		k8sFieldNames[kind+".webhooks.clientConfig"] = clientConfigFields
+		k8sFieldNames[kind+".webhooks.clientConfig.service"] = webhookServiceFields
+		k8sFieldNames[kind+".webhooks.namespaceSelector"] = labelSelectorFields
+		k8sFieldNames[kind+".webhooks.namespaceSelector.matchExpressions"] = matchExpressionsFields
+		k8sFieldNames[kind+".webhooks.objectSelector"] = labelSelectorFields
+		k8sFieldNames[kind+".webhooks.objectSelector.matchExpressions"] = matchExpressionsFields
+	}
+
+	// CSINode sub-paths
+	k8sFieldNames["CSINode.spec.drivers"] = csiNodeDriverFields
+	k8sFieldNames["CSINode.spec.drivers.allocatable"] = map[int]string{1: "count"}
+
+	// ServiceAccount sub-paths
+	k8sFieldNames["ServiceAccount.secrets"] = objectReferenceFields
+	k8sFieldNames["ServiceAccount.imagePullSecrets"] = imagePullSecretFields
+
+	// LimitRange sub-paths
+	k8sFieldNames["LimitRange.spec"] = map[int]string{1: "limits"}
+	k8sFieldNames["LimitRange.spec.limits"] = limitRangeItemFields
+
+	// ResourceQuota sub-paths
+	k8sFieldNames["ResourceQuota.spec"] = map[int]string{1: "hard", 2: "scopes", 3: "scopeSelector"}
+	k8sFieldNames["ResourceQuota.status"] = map[int]string{1: "hard", 2: "used"}
+}
+
+func registerPodSpecChildren(base string) {
+	for _, cField := range []string{"containers", "initContainers", "ephemeralContainers"} {
+		c := base + "." + cField
+		k8sFieldNames[c] = containerFields
+		k8sFieldNames[c+".ports"] = containerPortFields
+		k8sFieldNames[c+".env"] = envVarFields
+		k8sFieldNames[c+".env.valueFrom"] = envVarSourceFields
+		k8sFieldNames[c+".env.valueFrom.fieldRef"] = fieldRefFields
+		k8sFieldNames[c+".env.valueFrom.configMapKeyRef"] = configMapKeyRefFields
+		k8sFieldNames[c+".env.valueFrom.secretKeyRef"] = secretKeyRefFields
+		k8sFieldNames[c+".volumeMounts"] = volumeMountFields
+		k8sFieldNames[c+".resources"] = resourceRequirementsFields
+		for _, probe := range []string{"livenessProbe", "readinessProbe", "startupProbe"} {
+			k8sFieldNames[c+"."+probe] = probeFields
+			k8sFieldNames[c+"."+probe+".handler"] = probeHandlerFields
+			k8sFieldNames[c+"."+probe+".handler.exec"] = execActionFields
+			k8sFieldNames[c+"."+probe+".handler.httpGet"] = httpGetFields
+			k8sFieldNames[c+"."+probe+".handler.httpGet.port"] = intOrStringFields
+			k8sFieldNames[c+"."+probe+".handler.tcpSocket"] = tcpSocketFields
+			k8sFieldNames[c+"."+probe+".handler.tcpSocket.port"] = intOrStringFields
+		}
+		k8sFieldNames[c+".securityContext"] = containerSecurityContextFields
+		k8sFieldNames[c+".securityContext.capabilities"] = capabilitiesFields
+		k8sFieldNames[c+".securityContext.seLinuxOptions"] = seLinuxOptionsFields
+		k8sFieldNames[c+".securityContext.seccompProfile"] = seccompProfileFields
+		k8sFieldNames[c+".securityContext.appArmorProfile"] = appArmorProfileFields
+		k8sFieldNames[c+".envFrom"] = envFromSourceFields
+		k8sFieldNames[c+".envFrom.configMapRef"] = configMapEnvSourceFields
+		k8sFieldNames[c+".envFrom.secretRef"] = secretEnvSourceFields
+		k8sFieldNames[c+".lifecycle"] = lifecycleFields
+	}
+
+	v := base + ".volumes"
+	k8sFieldNames[v] = volumeFields
+	k8sFieldNames[v+".volumeSource"] = volumeSourceFields
+	k8sFieldNames[v+".volumeSource.secret"] = secretVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.secret.items"] = keyToPathFields
+	k8sFieldNames[v+".volumeSource.configMap"] = configMapVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.configMap.items"] = keyToPathFields
+	k8sFieldNames[v+".volumeSource.projected"] = projectedVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.projected.sources"] = projectionFields
+	k8sFieldNames[v+".volumeSource.projected.sources.serviceAccountToken"] = serviceAccountTokenProjectionFields
+	k8sFieldNames[v+".volumeSource.persistentVolumeClaim"] = persistentVolumeClaimVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.hostPath"] = hostPathVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.nfs"] = nfsVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.downwardAPI"] = downwardAPIVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.downwardAPI.items"] = downwardAPIVolumeFileFields
+	k8sFieldNames[v+".volumeSource.downwardAPI.items.fieldRef"] = fieldRefFields
+	k8sFieldNames[v+".volumeSource.projected.sources.configMap"] = configMapProjectionFields
+	k8sFieldNames[v+".volumeSource.projected.sources.configMap.items"] = keyToPathFields
+	k8sFieldNames[v+".volumeSource.projected.sources.secret"] = secretProjectionFields
+	k8sFieldNames[v+".volumeSource.projected.sources.secret.items"] = keyToPathFields
+	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI"] = downwardAPIVolumeSourceFields
+	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI.items"] = downwardAPIVolumeFileFields
+	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI.items.fieldRef"] = fieldRefFields
+
+	// Pod affinity/anti-affinity
+	for _, aField := range []string{"podAffinity", "podAntiAffinity"} {
+		a := base + ".affinity." + aField
+		k8sFieldNames[a] = podAffinityFields
+		k8sFieldNames[a+".requiredDuringSchedulingIgnoredDuringExecution"] = podAffinityTermFields
+		k8sFieldNames[a+".requiredDuringSchedulingIgnoredDuringExecution.labelSelector"] = labelSelectorFields
+		k8sFieldNames[a+".requiredDuringSchedulingIgnoredDuringExecution.labelSelector.matchExpressions"] = matchExpressionsFields
+		k8sFieldNames[a+".preferredDuringSchedulingIgnoredDuringExecution"] = weightedPodAffinityTermFields
+		k8sFieldNames[a+".preferredDuringSchedulingIgnoredDuringExecution.podAffinityTerm"] = podAffinityTermFields
+		k8sFieldNames[a+".preferredDuringSchedulingIgnoredDuringExecution.podAffinityTerm.labelSelector"] = labelSelectorFields
+		k8sFieldNames[a+".preferredDuringSchedulingIgnoredDuringExecution.podAffinityTerm.labelSelector.matchExpressions"] = matchExpressionsFields
+	}
+
+	k8sFieldNames[base+".tolerations"] = tolerationFields
+	k8sFieldNames[base+".imagePullSecrets"] = imagePullSecretFields
+	k8sFieldNames[base+".securityContext"] = podSecurityContextFields
+	k8sFieldNames[base+".securityContext.seLinuxOptions"] = seLinuxOptionsFields
+	k8sFieldNames[base+".securityContext.seccompProfile"] = seccompProfileFields
+	k8sFieldNames[base+".securityContext.appArmorProfile"] = appArmorProfileFields
+	k8sFieldNames[base+".affinity"] = affinityFields
+	k8sFieldNames[base+".affinity.nodeAffinity"] = nodeAffinityFields
+	k8sFieldNames[base+".affinity.nodeAffinity.required"] = nodeSelectorFields
+	k8sFieldNames[base+".affinity.nodeAffinity.required.nodeSelectorTerms"] = nodeSelectorTermFields
+	k8sFieldNames[base+".affinity.nodeAffinity.required.nodeSelectorTerms.matchExpressions"] = nodeSelectorRequirementFields
+	k8sFieldNames[base+".affinity.nodeAffinity.required.nodeSelectorTerms.matchFields"] = nodeSelectorRequirementFields
+	k8sFieldNames[base+".affinity.nodeAffinity.preferred"] = preferredSchedulingTermFields
+	k8sFieldNames[base+".affinity.nodeAffinity.preferred.preference"] = nodeSelectorTermFields
+	k8sFieldNames[base+".affinity.nodeAffinity.preferred.preference.matchExpressions"] = nodeSelectorRequirementFields
+	k8sFieldNames[base+".affinity.nodeAffinity.preferred.preference.matchFields"] = nodeSelectorRequirementFields
+	k8sFieldNames[base+".topologySpreadConstraints"] = topologySpreadConstraintFields
+	k8sFieldNames[base+".topologySpreadConstraints.labelSelector"] = labelSelectorFields
+	k8sFieldNames[base+".topologySpreadConstraints.labelSelector.matchExpressions"] = matchExpressionsFields
+}
+
+func registerContainerStatusPaths(statusBase string) {
+	for _, csField := range []string{"containerStatuses", "initContainerStatuses", "ephemeralContainerStatuses"} {
+		cs := statusBase + "." + csField
+		k8sFieldNames[cs] = containerStatusFields
+		k8sFieldNames[cs+".resources"] = resourceRequirementsFields
+		k8sFieldNames[cs+".volumeMounts"] = volumeMountStatusFields
+		k8sFieldNames[cs+".user"] = containerUserFields
+		k8sFieldNames[cs+".user.linux"] = linuxContainerUserFields
+		for _, stateField := range []string{"state", "lastState"} {
+			s := cs + "." + stateField
+			k8sFieldNames[s] = containerStateFields
+			k8sFieldNames[s+".waiting"] = containerStateWaitingFields
+			k8sFieldNames[s+".running"] = containerStateRunningFields
+			k8sFieldNames[s+".terminated"] = containerStateTerminatedFields
+		}
+	}
 }
 
 type ParsedKey struct {
@@ -594,13 +1149,9 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 			childPath = key
 		}
 
-		// Look up child field names: first try k8sFieldNames by path, then commonFieldNames by field name
 		var childNames map[int]string
 		if childPath != "" {
 			childNames = k8sFieldNames[childPath]
-		}
-		if childNames == nil && key != fmt.Sprintf("field_%d", num) {
-			childNames = commonFieldNames[key]
 		}
 
 		if childNames == nil && isMapEntries(entries) {
@@ -746,7 +1297,17 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 			sectionPath := kind + "." + key
 			sectionNames := k8sFieldNames[sectionPath]
 
-			if len(entries) == 1 {
+			if sectionNames == nil && isMapEntries(entries) {
+				m := make(map[string]interface{})
+				for _, e := range entries {
+					ef, _ := parseProtoMessage(e.Bytes)
+					k := protoString(ef, 1)
+					if k != "" && len(ef[2]) > 0 {
+						m[k] = decodeGenericField(ef[2][0], sectionPath, 1)
+					}
+				}
+				result[key] = m
+			} else if len(entries) == 1 {
 				if entries[0].WireType == 2 && sectionNames != nil {
 					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, sectionPath, 0)
 				} else {
