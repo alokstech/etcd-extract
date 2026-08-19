@@ -98,6 +98,8 @@ var envVarSourceFields = map[int]string{
 
 var fieldRefFields = map[int]string{1: "apiVersion", 2: "fieldPath"}
 
+var resourceFieldRefFields = map[int]string{1: "containerName", 2: "resource", 3: "divisor"}
+
 var configMapKeyRefFields = map[int]string{1: "name", 2: "key", 3: "optional"}
 
 var secretKeyRefFields = map[int]string{1: "name", 2: "key", 3: "optional"}
@@ -112,6 +114,7 @@ var resourceRequirementsFields = map[int]string{1: "limits", 2: "requests"}
 var probeFields = map[int]string{
 	1: "handler", 2: "initialDelaySeconds", 3: "timeoutSeconds",
 	4: "periodSeconds", 5: "successThreshold", 6: "failureThreshold",
+	7: "terminationGracePeriodSeconds",
 }
 
 var probeHandlerFields = map[int]string{1: "exec", 2: "httpGet", 3: "tcpSocket"}
@@ -126,8 +129,9 @@ var tcpSocketFields = map[int]string{1: "port", 2: "host"}
 
 var containerSecurityContextFields = map[int]string{
 	1: "capabilities", 2: "privileged", 3: "seLinuxOptions", 4: "runAsUser",
-	6: "procMount", 7: "runAsNonRoot", 8: "readOnlyRootFilesystem", 10: "windowsOptions",
-	11: "seccompProfile", 15: "allowPrivilegeEscalation", 18: "runAsGroup", 22: "appArmorProfile",
+	5: "runAsNonRoot", 6: "readOnlyRootFilesystem", 7: "allowPrivilegeEscalation",
+	8: "runAsGroup", 9: "procMount", 10: "windowsOptions", 11: "seccompProfile",
+	22: "appArmorProfile",
 }
 
 var capabilitiesFields = map[int]string{1: "add", 2: "drop"}
@@ -152,6 +156,30 @@ var configMapEnvSourceFields = map[int]string{1: "name", 2: "optional"}
 var secretEnvSourceFields = map[int]string{1: "name", 2: "optional"}
 
 var lifecycleFields = map[int]string{1: "postStart", 2: "preStop"}
+
+var lifecycleHandlerFields = map[int]string{1: "exec", 2: "httpGet", 3: "tcpSocket", 4: "sleep"}
+
+var sleepActionFields = map[int]string{1: "seconds"}
+
+var containerResizePolicyFields = map[int]string{1: "resourceName", 2: "restartPolicy"}
+
+var volumeDeviceFields = map[int]string{1: "name", 2: "devicePath"}
+
+var dnsConfigFields = map[int]string{1: "nameservers", 2: "searches", 3: "options"}
+
+var dnsConfigOptionFields = map[int]string{1: "name", 2: "value"}
+
+var podReadinessGateFields = map[int]string{1: "conditionType"}
+
+var podOSFields = map[int]string{1: "name"}
+
+var podSchedulingGateFields = map[int]string{1: "name"}
+
+var uncountedTerminatedPodsFields = map[int]string{1: "succeeded", 2: "failed"}
+
+var endpointHintsFields = map[int]string{1: "forZones"}
+
+var forZoneFields = map[int]string{1: "name"}
 
 var volumeFields = map[int]string{1: "name", 2: "volumeSource"}
 
@@ -192,7 +220,7 @@ var nfsVolumeSourceFields = map[int]string{1: "server", 2: "path", 3: "readOnly"
 
 var localVolumeSourceFields = map[int]string{1: "path", 2: "fsType"}
 
-var downwardAPIVolumeSourceFields = map[int]string{1: "items"}
+var downwardAPIVolumeSourceFields = map[int]string{1: "items", 2: "defaultMode"}
 
 var downwardAPIVolumeFileFields = map[int]string{
 	1: "path", 2: "fieldRef", 3: "resourceFieldRef", 4: "mode",
@@ -326,11 +354,12 @@ var objectMetaFields = map[int]string{
 	6: "resourceVersion", 7: "generation", 8: "creationTimestamp",
 	9: "deletionTimestamp", 10: "deletionGracePeriodSeconds",
 	11: "labels", 12: "annotations", 13: "ownerReferences", 14: "finalizers",
+	15: "clusterName", 17: "managedFields",
 }
 
-var configMapProjectionFields = map[int]string{1: "name", 2: "items", 3: "optional"}
+var configMapProjectionFields = map[int]string{1: "name", 2: "items", 4: "optional"}
 
-var secretProjectionFields = map[int]string{1: "name", 2: "items", 3: "optional"}
+var secretProjectionFields = map[int]string{1: "name", 2: "items", 4: "optional"}
 
 var podAffinityFields = map[int]string{
 	1: "requiredDuringSchedulingIgnoredDuringExecution",
@@ -381,7 +410,12 @@ var csiPVSourceFields = map[int]string{
 	1: "driver", 2: "volumeHandle", 3: "readOnly", 4: "fsType",
 	5: "volumeAttributes", 6: "controllerPublishSecretRef",
 	7: "nodeStageSecretRef", 8: "nodePublishSecretRef",
+	9: "controllerExpandSecretRef", 10: "nodeExpandSecretRef",
 }
+
+var secretReferenceFields = map[int]string{1: "name", 2: "namespace"}
+
+var typedObjectReferenceFields = map[int]string{1: "apiGroup", 2: "kind", 3: "name", 4: "namespace"}
 
 var pvSourceFields = map[int]string{
 	1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath",
@@ -421,7 +455,7 @@ var k8sFieldNames = map[string]map[int]string{
 	"PersistentVolume.spec.persistentVolumeSource": {1: "gcePersistentDisk", 2: "awsElasticBlockStore", 3: "hostPath", 4: "glusterfs", 5: "nfs", 6: "rbd", 7: "iscsi", 8: "cinder", 9: "cephfs", 14: "fc", 18: "flexVolume", 19: "azureDisk", 20: "local", 21: "storageos", 22: "csi"},
 	"PersistentVolume.status":      {1: "phase", 2: "message", 3: "reason", 4: "lastPhaseTransitionTime"},
 	"PersistentVolumeClaim":        {2: "spec", 3: "status"},
-	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode"},
+	"PersistentVolumeClaim.spec":   {1: "accessModes", 2: "resources", 3: "volumeName", 4: "selector", 5: "storageClassName", 6: "volumeMode", 7: "dataSource", 8: "dataSourceRef", 9: "volumeAttributesClassName"},
 	"PersistentVolumeClaim.status": {1: "phase", 2: "accessModes", 3: "capacity", 4: "conditions"},
 	"Pod":                          {2: "spec", 3: "status"},
 	"Pod.spec":                     podSpecFields,
@@ -430,40 +464,43 @@ var k8sFieldNames = map[string]map[int]string{
 	"Deployment.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "strategy", 5: "minReadySeconds", 6: "revisionHistoryLimit", 7: "paused", 9: "progressDeadlineSeconds"},
 	"Deployment.spec.template":     podTemplateFields,
 	"Deployment.spec.template.spec": podSpecFields,
-	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "availableReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "readyReplicas", 8: "collisionCount"},
+	"Deployment.status":            {1: "observedGeneration", 2: "replicas", 3: "updatedReplicas", 4: "availableReplicas", 5: "unavailableReplicas", 6: "conditions", 7: "readyReplicas", 8: "collisionCount", 9: "terminatingReplicas"},
 	"Deployment.status.conditions": {1: "type", 2: "status", 4: "reason", 5: "message", 6: "lastUpdateTime", 7: "lastTransitionTime"},
 	"ReplicaSet":                   {2: "spec", 3: "status"},
 	"ReplicaSet.spec":              {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
 	"ReplicaSet.spec.template":     podTemplateFields,
 	"ReplicaSet.spec.template.spec": podSpecFields,
-	"ReplicaSet.status":            {1: "replicas", 2: "fullyLabeledReplicas", 3: "readyReplicas", 4: "availableReplicas", 5: "observedGeneration", 6: "conditions"},
+	"ReplicaSet.status":            {1: "replicas", 2: "fullyLabeledReplicas", 3: "observedGeneration", 4: "readyReplicas", 5: "availableReplicas", 6: "conditions", 7: "terminatingReplicas"},
 	"DaemonSet":                    {2: "spec", 3: "status"},
-	"DaemonSet.spec":               {1: "selector", 2: "template", 3: "updateStrategy", 4: "minReadySeconds", 5: "revisionHistoryLimit"},
+	"DaemonSet.spec":               {1: "selector", 2: "template", 3: "updateStrategy", 4: "minReadySeconds", 6: "revisionHistoryLimit"},
 	"DaemonSet.spec.template":      podTemplateFields,
 	"DaemonSet.spec.template.spec": podSpecFields,
-	"DaemonSet.status":             {1: "currentNumberScheduled", 2: "numberMisscheduled", 3: "desiredNumberScheduled", 4: "numberReady", 5: "observedGeneration", 6: "updatedNumberScheduled", 7: "numberAvailable", 8: "numberUnavailable", 9: "conditions"},
+	"DaemonSet.status":             {1: "currentNumberScheduled", 2: "numberMisscheduled", 3: "desiredNumberScheduled", 4: "numberReady", 5: "observedGeneration", 6: "updatedNumberScheduled", 7: "numberAvailable", 8: "numberUnavailable", 9: "conditions", 10: "terminatingNumberScheduled"},
 	"StatefulSet":                  {2: "spec", 3: "status"},
-	"StatefulSet.spec":             {1: "replicas", 2: "selector", 3: "template", 4: "volumeClaimTemplates", 5: "serviceName", 6: "podManagementPolicy", 7: "updateStrategy", 8: "revisionHistoryLimit", 9: "minReadySeconds"},
+	"StatefulSet.spec":             {1: "replicas", 2: "selector", 3: "template", 4: "volumeClaimTemplates", 5: "serviceName", 6: "podManagementPolicy", 7: "updateStrategy", 8: "revisionHistoryLimit", 9: "minReadySeconds", 10: "persistentVolumeClaimRetentionPolicy", 11: "ordinals"},
 	"StatefulSet.spec.template":    podTemplateFields,
 	"StatefulSet.spec.template.spec": podSpecFields,
-	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 9: "conditions", 10: "availableReplicas"},
+	"StatefulSet.status":           {1: "observedGeneration", 2: "replicas", 3: "readyReplicas", 4: "currentReplicas", 5: "updatedReplicas", 6: "currentRevision", 7: "updateRevision", 8: "collisionCount", 9: "conditions", 10: "availableReplicas", 11: "terminatingReplicas"},
 	"Service":                      {2: "spec", 3: "status"},
-	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 6: "sessionAffinity", 7: "loadBalancerIP", 8: "sessionAffinityConfig", 9: "loadBalancerSourceRanges", 10: "externalName", 11: "externalTrafficPolicy", 12: "healthCheckNodePort", 13: "publishNotReadyAddresses", 17: "ipFamilyPolicy", 18: "clusterIPs", 19: "ipFamilies", 22: "internalTrafficPolicy", 23: "allocateLoadBalancerNodePorts", 24: "loadBalancerClass", 25: "trafficDistribution"},
+	"Service.spec":                 {1: "ports", 2: "selector", 3: "clusterIP", 4: "type", 5: "externalIPs", 7: "sessionAffinity", 8: "loadBalancerIP", 9: "loadBalancerSourceRanges", 10: "externalName", 11: "externalTrafficPolicy", 12: "healthCheckNodePort", 13: "publishNotReadyAddresses", 14: "sessionAffinityConfig", 17: "ipFamilyPolicy", 18: "clusterIPs", 19: "ipFamilies", 20: "allocateLoadBalancerNodePorts", 22: "internalTrafficPolicy", 23: "trafficDistribution", 24: "loadBalancerClass"},
 	"Service.spec.ports":           {1: "name", 2: "protocol", 3: "port", 4: "targetPort", 5: "nodePort"},
 	"Service.status":               {1: "loadBalancer", 2: "conditions"},
+	"Service.status.loadBalancer":   {1: "ingress"},
+	"Service.status.loadBalancer.ingress": {1: "ip", 2: "hostname", 3: "ipMode", 4: "ports"},
 	"Endpoints":                          {2: "subsets"},
 	"Endpoints.subsets":                   {1: "addresses", 2: "notReadyAddresses", 3: "ports"},
 	"Endpoints.subsets.addresses":         {1: "ip", 2: "targetRef", 3: "hostname", 4: "nodeName"},
 	"Endpoints.subsets.notReadyAddresses": {1: "ip", 2: "targetRef", 3: "hostname", 4: "nodeName"},
 	"Endpoints.subsets.ports":             {1: "name", 2: "port", 3: "protocol", 4: "appProtocol"},
 	"Job":                          {2: "spec", 3: "status"},
-	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished"},
+	"Job.spec":                     {1: "parallelism", 2: "completions", 3: "activeDeadlineSeconds", 4: "selector", 5: "manualSelector", 6: "template", 7: "backoffLimit", 8: "ttlSecondsAfterFinished", 9: "completionMode", 10: "backoffLimitPerIndex", 11: "maxFailedIndexes", 12: "suspend", 13: "podFailurePolicy", 14: "podReplacementPolicy", 15: "successPolicy", 16: "managedBy"},
 	"Job.spec.template":            podTemplateFields,
 	"Job.spec.template.spec":       podSpecFields,
-	"Job.status":                   {1: "conditions", 2: "startTime", 3: "completionTime", 4: "active", 5: "succeeded", 6: "failed"},
+	"Job.status":                   {1: "conditions", 2: "startTime", 3: "completionTime", 4: "active", 5: "succeeded", 6: "failed", 7: "completedIndexes", 8: "uncountedTerminatedPods", 9: "ready", 10: "failedIndexes", 11: "terminating"},
 	"CronJob":                      {2: "spec", 3: "status"},
 	"CronJob.spec":                 {1: "schedule", 2: "startingDeadlineSeconds", 3: "concurrencyPolicy", 4: "suspend", 5: "jobTemplate", 6: "successfulJobsHistoryLimit", 7: "failedJobsHistoryLimit"},
 	"CronJob.status":               {1: "active", 4: "lastScheduleTime", 5: "lastSuccessfulTime"},
+	"CronJob.status.active":        objectReferenceFields,
 	"Ingress":                      {2: "spec", 3: "status"},
 	"Ingress.spec":                 {1: "ingressClassName", 2: "defaultBackend", 3: "tls", 4: "rules"},
 	"Ingress.status":               {1: "loadBalancer"},
@@ -506,6 +543,118 @@ var k8sFieldNames = map[string]map[int]string{
 	"MutatingWebhookConfiguration.webhooks.rules.rule": {1: "apiGroups", 2: "apiVersions", 3: "resources", 4: "scope"},
 	"LimitRange":                   {2: "spec"},
 	"ResourceQuota":                {2: "spec", 3: "status"},
+	"Event":                        {2: "involvedObject", 3: "reason", 4: "message", 5: "source", 6: "firstTimestamp", 7: "lastTimestamp", 8: "count", 9: "type", 10: "eventTime", 11: "series", 12: "action", 13: "related", 14: "reportingComponent", 15: "reportingInstance"},
+	"Event.involvedObject":         objectReferenceFields,
+	"Event.source":                 {1: "component", 2: "host"},
+	"Event.series":                 {1: "count", 2: "lastObservedTime"},
+	"Event.related":                objectReferenceFields,
+	"EndpointSlice":                {2: "endpoints", 3: "ports", 4: "addressType"},
+	"EndpointSlice.endpoints":      {1: "addresses", 2: "conditions", 3: "hostname", 4: "targetRef", 5: "deprecatedTopology", 6: "nodeName", 7: "zone", 8: "hints"},
+	"EndpointSlice.endpoints.conditions": {1: "ready", 2: "serving", 3: "terminating"},
+	"EndpointSlice.endpoints.targetRef":  objectReferenceFields,
+	"EndpointSlice.endpoints.hints":     endpointHintsFields,
+	"EndpointSlice.endpoints.hints.forZones": forZoneFields,
+	"EndpointSlice.ports":          {1: "name", 2: "port", 3: "protocol", 4: "appProtocol"},
+	"Lease":                        {2: "spec"},
+	"Lease.spec":                   {1: "holderIdentity", 2: "leaseDurationSeconds", 3: "acquireTime", 4: "renewTime", 5: "leaseTransitions", 6: "strategy", 7: "preferredHolder"},
+	"IPAddress":                    {2: "spec"},
+	"IPAddress.spec":               {1: "parentRef"},
+	"IPAddress.spec.parentRef":     {1: "group", 2: "resource", 3: "namespace", 4: "name"},
+	"ServiceCIDR":                  {2: "spec", 3: "status"},
+	"ServiceCIDR.spec":             {1: "cidrs"},
+	"ServiceCIDR.status":           {1: "conditions"},
+	"NetworkPolicy":                {2: "spec"},
+	"NetworkPolicy.spec":           {1: "podSelector", 2: "ingress", 3: "egress", 4: "policyTypes"},
+	"NetworkPolicy.spec.podSelector": labelSelectorFields,
+	"NetworkPolicy.spec.ingress":   {1: "ports", 2: "from"},
+	"NetworkPolicy.spec.egress":    {1: "ports", 2: "to"},
+	"PodDisruptionBudget":          {2: "spec", 3: "status"},
+	"PodDisruptionBudget.spec":     {1: "minAvailable", 2: "selector", 3: "maxUnavailable", 4: "unhealthyPodEvictionPolicy"},
+	"PodDisruptionBudget.status":   {1: "observedGeneration", 2: "disruptedPods", 3: "disruptionsAllowed", 4: "currentHealthy", 5: "desiredHealthy", 6: "expectedPods", 7: "conditions"},
+	"CertificateSigningRequest":        {2: "spec", 3: "status"},
+	"CertificateSigningRequest.spec":   {1: "request", 2: "username", 3: "uid", 4: "groups", 5: "usages", 6: "extra", 7: "signerName", 8: "expirationSeconds"},
+	"CertificateSigningRequest.status": {1: "conditions", 2: "certificate"},
+	"HorizontalPodAutoscaler":          {2: "spec", 3: "status"},
+	"HorizontalPodAutoscaler.spec":     {1: "scaleTargetRef", 2: "minReplicas", 3: "maxReplicas", 4: "metrics", 5: "behavior"},
+	"HorizontalPodAutoscaler.spec.scaleTargetRef": {1: "kind", 2: "name", 3: "apiVersion"},
+	"HorizontalPodAutoscaler.status":   {1: "observedGeneration", 2: "lastScaleTime", 3: "currentReplicas", 4: "desiredReplicas", 5: "currentMetrics", 6: "conditions"},
+	"ValidatingAdmissionPolicy":            {2: "spec", 3: "status"},
+	"ValidatingAdmissionPolicy.spec":       {1: "paramKind", 2: "matchConstraints", 3: "validations", 4: "failurePolicy", 5: "auditAnnotations", 6: "matchConditions", 7: "variables"},
+	"ValidatingAdmissionPolicy.status":     {1: "observedGeneration", 2: "typeChecking", 3: "conditions"},
+	"ValidatingAdmissionPolicyBinding":         {2: "spec"},
+	"ValidatingAdmissionPolicyBinding.spec":    {1: "policyName", 2: "paramRef", 3: "matchResources", 4: "validationActions"},
+	"ReplicationController":                    {2: "spec", 3: "status"},
+	"ReplicationController.spec":               {1: "replicas", 2: "selector", 3: "template", 4: "minReadySeconds"},
+	"ReplicationController.spec.template":      podTemplateFields,
+	"ReplicationController.spec.template.spec": podSpecFields,
+	"ReplicationController.status":             {1: "replicas", 2: "fullyLabeledReplicas", 3: "observedGeneration", 4: "readyReplicas", 5: "availableReplicas", 6: "conditions"},
+	"VolumeAttachment":              {2: "spec", 3: "status"},
+	"VolumeAttachment.spec":         {1: "attacher", 2: "source", 3: "nodeName"},
+	"VolumeAttachment.spec.source":  {1: "persistentVolumeName", 2: "inlineVolumeSpec"},
+	"VolumeAttachment.status":       {1: "attached", 2: "attachmentMetadata", 3: "attachError", 4: "detachError"},
+
+	// OpenShift Route
+	"Route":        {2: "spec", 3: "status"},
+	"Route.spec":   {1: "host", 2: "path", 3: "to", 4: "alternateBackends", 5: "port", 6: "tls", 7: "wildcardPolicy", 8: "subdomain"},
+	"Route.spec.to": {1: "kind", 2: "name", 3: "weight"},
+	"Route.spec.alternateBackends": {1: "kind", 2: "name", 3: "weight"},
+	"Route.spec.port": {1: "targetPort"},
+	"Route.spec.port.targetPort": intOrStringFields,
+	"Route.spec.tls":  {1: "termination", 2: "certificate", 3: "key", 4: "caCertificate", 5: "destinationCACertificate", 6: "insecureEdgeTerminationPolicy", 7: "externalCertificate"},
+	"Route.status":    {1: "ingress"},
+	"Route.status.ingress": {1: "host", 2: "routerName", 3: "conditions", 4: "wildcardPolicy", 5: "routerCanonicalHostname"},
+	"Route.status.ingress.conditions": {1: "type", 2: "status", 3: "reason", 4: "message", 5: "lastTransitionTime"},
+
+	// OpenShift Image
+	"Image": {2: "dockerImageReference", 3: "dockerImageMetadata", 4: "dockerImageMetadataVersion", 5: "dockerImageManifest", 6: "dockerImageLayers", 7: "signatures", 8: "dockerImageSignatures", 9: "dockerImageManifestMediaType", 10: "dockerImageConfig", 11: "dockerImageManifests"},
+	"Image.dockerImageLayers": {1: "name", 2: "size", 3: "mediaType"},
+	"Image.dockerImageManifests": {1: "digest", 2: "mediaType", 3: "manifestSize", 4: "architecture", 5: "os", 6: "variant"},
+
+	// OpenShift ImageStream
+	"ImageStream":            {2: "spec", 3: "status"},
+	"ImageStream.spec":       {1: "dockerImageRepository", 2: "tags", 3: "lookupPolicy"},
+	"ImageStream.spec.lookupPolicy": {3: "local"},
+	"ImageStream.spec.tags":  {1: "name", 2: "annotations", 3: "from", 4: "reference", 5: "generation", 6: "importPolicy", 7: "referencePolicy"},
+	"ImageStream.spec.tags.from": objectReferenceFields,
+	"ImageStream.spec.tags.importPolicy": {1: "insecure", 2: "scheduled", 3: "importMode"},
+	"ImageStream.spec.tags.referencePolicy": {1: "type"},
+	"ImageStream.status":     {1: "dockerImageRepository", 2: "tags", 3: "publicDockerImageRepository"},
+	"ImageStream.status.tags": {1: "tag", 2: "items", 3: "conditions"},
+	"ImageStream.status.tags.items": {1: "created", 2: "dockerImageReference", 3: "image", 4: "generation"},
+	"ImageStream.status.tags.conditions": {1: "type", 2: "status", 3: "lastTransitionTime", 4: "reason", 5: "message", 6: "generation"},
+
+	// OpenShift OAuthClient
+	"OAuthClient": {2: "secret", 3: "additionalSecrets", 4: "respondWithChallenges", 5: "redirectURIs", 6: "grantMethod", 7: "scopeRestrictions", 8: "accessTokenMaxAgeSeconds", 9: "accessTokenInactivityTimeoutSeconds"},
+
+	// OpenShift Template
+	"Template": {2: "message", 3: "objects", 4: "parameters", 5: "labels"},
+	"Template.parameters": {1: "name", 2: "displayName", 3: "description", 4: "value", 5: "generate", 6: "from", 7: "required"},
+
+	// OpenShift Identity
+	"Identity": {2: "providerName", 3: "providerUserName", 4: "user", 5: "extra"},
+	"Identity.user": objectReferenceFields,
+
+	// OpenShift BuildConfig
+	"BuildConfig":        {2: "spec", 3: "status"},
+	"BuildConfig.spec":   {1: "triggers", 2: "runPolicy", 3: "commonSpec", 4: "successfulBuildsHistoryLimit", 5: "failedBuildsHistoryLimit"},
+	"BuildConfig.status": {1: "lastVersion", 2: "imageChangeTriggers"},
+
+	// OpenShift Build
+	"Build":        {2: "spec", 3: "status"},
+	"Build.spec":   {1: "commonSpec", 2: "triggeredBy"},
+	"Build.status": {1: "phase", 2: "cancelled", 3: "reason", 4: "message", 5: "startTimestamp", 6: "completionTimestamp", 7: "duration", 8: "outputDockerImageReference", 9: "config", 10: "output", 11: "stages", 12: "logSnippet", 13: "conditions"},
+
+	// OpenShift DeploymentConfig
+	"DeploymentConfig":        {2: "spec", 3: "status"},
+	"DeploymentConfig.spec":   {1: "strategy", 2: "triggers", 3: "replicas", 4: "revisionHistoryLimit", 5: "test", 6: "paused", 7: "selector", 8: "template", 9: "minReadySeconds"},
+	"DeploymentConfig.spec.template": podTemplateFields,
+	"DeploymentConfig.spec.template.spec": podSpecFields,
+	"DeploymentConfig.status": {1: "latestVersion", 2: "observedGeneration", 3: "replicas", 4: "updatedReplicas", 5: "availableReplicas", 6: "unavailableReplicas", 7: "details", 8: "conditions", 9: "readyReplicas"},
+
+	// OpenShift TemplateInstance
+	"TemplateInstance":        {2: "spec", 3: "status"},
+	"TemplateInstance.spec":   {1: "template", 2: "secret", 3: "requester"},
+	"TemplateInstance.status": {1: "conditions", 2: "objects"},
 }
 
 func init() {
@@ -517,6 +666,8 @@ func init() {
 		"StatefulSet.spec.template.spec",
 		"Job.spec.template.spec",
 		"CronJob.spec.jobTemplate.spec.template.spec",
+		"ReplicationController.spec.template.spec",
+		"DeploymentConfig.spec.template.spec",
 	}
 	for _, p := range podSpecPaths {
 		registerPodSpecChildren(p)
@@ -533,6 +684,8 @@ func init() {
 		"Job.spec.template.metadata",
 		"CronJob.spec.jobTemplate.spec.template.metadata",
 		"CronJob.spec.jobTemplate.metadata",
+		"ReplicationController.spec.template.metadata",
+		"DeploymentConfig.spec.template.metadata",
 	}
 	for _, p := range templateMetaPaths {
 		k8sFieldNames[p] = objectMetaFields
@@ -571,6 +724,17 @@ func init() {
 	k8sFieldNames["StatefulSet.spec.updateStrategy"] = deploymentStrategyFields
 	k8sFieldNames["StatefulSet.spec.updateStrategy.rollingUpdate"] = statefulSetRollingUpdateFields
 	k8sFieldNames["StatefulSet.spec.updateStrategy.rollingUpdate.maxUnavailable"] = intOrStringFields
+	k8sFieldNames["StatefulSet.spec.persistentVolumeClaimRetentionPolicy"] = map[int]string{1: "whenDeleted", 2: "whenScaled"}
+	k8sFieldNames["StatefulSet.spec.ordinals"] = map[int]string{1: "start"}
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates"] = map[int]string{1: "metadata", 2: "spec", 3: "status"}
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.metadata"] = objectMetaFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec"] = k8sFieldNames["PersistentVolumeClaim.spec"]
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec.resources"] = resourceRequirementsFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec.selector"] = labelSelectorFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec.selector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec.dataSource"] = typedObjectReferenceFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.spec.dataSourceRef"] = typedObjectReferenceFields
+	k8sFieldNames["StatefulSet.spec.volumeClaimTemplates.status"] = k8sFieldNames["PersistentVolumeClaim.status"]
 
 	// Condition sub-paths (each type has different field layouts)
 	k8sFieldNames["Pod.status.conditions"] = podConditionFields
@@ -579,7 +743,9 @@ func init() {
 	k8sFieldNames["ReplicaSet.status.conditions"] = replicaSetConditionFields
 	k8sFieldNames["DaemonSet.status.conditions"] = replicaSetConditionFields
 	k8sFieldNames["StatefulSet.status.conditions"] = replicaSetConditionFields
+	k8sFieldNames["ReplicationController.status.conditions"] = replicaSetConditionFields
 	k8sFieldNames["Job.status.conditions"] = podConditionFields
+	k8sFieldNames["Job.status.uncountedTerminatedPods"] = uncountedTerminatedPodsFields
 	k8sFieldNames["PersistentVolumeClaim.status.conditions"] = podConditionFields
 	k8sFieldNames["FlowSchema.status.conditions"] = flowControlConditionFields
 	k8sFieldNames["PriorityLevelConfiguration.status.conditions"] = flowControlConditionFields
@@ -587,6 +753,9 @@ func init() {
 
 	// RBAC sub-paths
 	k8sFieldNames["ClusterRole.rules"] = policyRuleFields
+	k8sFieldNames["ClusterRole.aggregationRule"] = map[int]string{1: "clusterRoleSelectors"}
+	k8sFieldNames["ClusterRole.aggregationRule.clusterRoleSelectors"] = labelSelectorFields
+	k8sFieldNames["ClusterRole.aggregationRule.clusterRoleSelectors.matchExpressions"] = matchExpressionsFields
 	k8sFieldNames["Role.rules"] = policyRuleFields
 	for _, kind := range []string{"ClusterRoleBinding", "RoleBinding"} {
 		k8sFieldNames[kind+".subjects"] = rbacSubjectFields
@@ -616,19 +785,30 @@ func init() {
 	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.hostPath"] = hostPathVolumeSourceFields
 	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.local"] = localVolumeSourceFields
 	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi"] = csiPVSourceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi.controllerPublishSecretRef"] = secretReferenceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi.nodeStageSecretRef"] = secretReferenceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi.nodePublishSecretRef"] = secretReferenceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi.controllerExpandSecretRef"] = secretReferenceFields
+	k8sFieldNames["PersistentVolume.spec.persistentVolumeSource.csi.nodeExpandSecretRef"] = secretReferenceFields
 
 	// PersistentVolumeClaim sub-paths
 	k8sFieldNames["PersistentVolumeClaim.spec.resources"] = resourceRequirementsFields
+	k8sFieldNames["PersistentVolumeClaim.spec.dataSource"] = typedObjectReferenceFields
+	k8sFieldNames["PersistentVolumeClaim.spec.dataSourceRef"] = typedObjectReferenceFields
 
 	// Endpoints sub-paths
 	k8sFieldNames["Endpoints.subsets"] = endpointSubsetFields
 	k8sFieldNames["Endpoints.subsets.addresses"] = endpointAddressFields
+	k8sFieldNames["Endpoints.subsets.addresses.targetRef"] = objectReferenceFields
 	k8sFieldNames["Endpoints.subsets.notReadyAddresses"] = endpointAddressFields
+	k8sFieldNames["Endpoints.subsets.notReadyAddresses.targetRef"] = objectReferenceFields
 	k8sFieldNames["Endpoints.subsets.ports"] = endpointPortFields
 
 	// Service sub-paths
 	k8sFieldNames["Service.spec.ports"] = servicePortFields
 	k8sFieldNames["Service.spec.ports.targetPort"] = intOrStringFields
+	k8sFieldNames["Service.spec.sessionAffinityConfig"] = map[int]string{1: "clientIP"}
+	k8sFieldNames["Service.spec.sessionAffinityConfig.clientIP"] = map[int]string{1: "timeoutSeconds"}
 
 	// Ingress sub-paths
 	k8sFieldNames["Ingress.spec.tls"] = ingressTLSFields
@@ -670,6 +850,205 @@ func init() {
 	// ResourceQuota sub-paths
 	k8sFieldNames["ResourceQuota.spec"] = map[int]string{1: "hard", 2: "scopes", 3: "scopeSelector"}
 	k8sFieldNames["ResourceQuota.status"] = map[int]string{1: "hard", 2: "used"}
+
+	// NetworkPolicy sub-paths
+	k8sFieldNames["NetworkPolicy.spec.podSelector.matchExpressions"] = matchExpressionsFields
+	npPortFields := map[int]string{1: "protocol", 2: "port", 3: "endPort"}
+	npPeerFields := map[int]string{1: "podSelector", 2: "namespaceSelector", 3: "ipBlock"}
+	npIPBlockFields := map[int]string{1: "cidr", 2: "except"}
+	k8sFieldNames["NetworkPolicy.spec.ingress.ports"] = npPortFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.ports.port"] = intOrStringFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from"] = npPeerFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from.podSelector"] = labelSelectorFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from.podSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from.namespaceSelector"] = labelSelectorFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from.namespaceSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["NetworkPolicy.spec.ingress.from.ipBlock"] = npIPBlockFields
+	k8sFieldNames["NetworkPolicy.spec.egress.ports"] = npPortFields
+	k8sFieldNames["NetworkPolicy.spec.egress.ports.port"] = intOrStringFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to"] = npPeerFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to.podSelector"] = labelSelectorFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to.podSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to.namespaceSelector"] = labelSelectorFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to.namespaceSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["NetworkPolicy.spec.egress.to.ipBlock"] = npIPBlockFields
+
+	// PodDisruptionBudget sub-paths
+	k8sFieldNames["PodDisruptionBudget.spec.minAvailable"] = intOrStringFields
+	k8sFieldNames["PodDisruptionBudget.spec.selector"] = labelSelectorFields
+	k8sFieldNames["PodDisruptionBudget.spec.selector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["PodDisruptionBudget.spec.maxUnavailable"] = intOrStringFields
+	k8sFieldNames["PodDisruptionBudget.status.conditions"] = metaConditionFields
+
+	// ServiceCIDR sub-paths
+	k8sFieldNames["ServiceCIDR.status.conditions"] = metaConditionFields
+
+	// CertificateSigningRequest sub-paths
+	csrConditionFields := map[int]string{1: "type", 2: "reason", 3: "message", 4: "lastUpdateTime", 5: "lastTransitionTime", 6: "status"}
+	k8sFieldNames["CertificateSigningRequest.status.conditions"] = csrConditionFields
+
+	// HorizontalPodAutoscaler sub-paths
+	hpaMetricSpecFields := map[int]string{1: "type", 2: "object", 3: "pods", 4: "resource", 5: "containerResource", 6: "external"}
+	hpaMetricTargetFields := map[int]string{1: "type", 2: "value", 3: "averageValue", 4: "averageUtilization"}
+	hpaResourceMetricFields := map[int]string{1: "name", 2: "target"}
+	hpaMetricStatusFields := map[int]string{1: "type", 2: "object", 3: "pods", 4: "resource", 5: "containerResource", 6: "external"}
+	hpaMetricValueStatusFields := map[int]string{1: "value", 2: "averageValue", 3: "averageUtilization"}
+	hpaResourceMetricStatusFields := map[int]string{1: "name", 2: "current"}
+	hpaConditionFields := map[int]string{1: "type", 2: "status", 3: "lastTransitionTime", 4: "reason", 5: "message"}
+	k8sFieldNames["HorizontalPodAutoscaler.spec.metrics"] = hpaMetricSpecFields
+	k8sFieldNames["HorizontalPodAutoscaler.spec.metrics.resource"] = hpaResourceMetricFields
+	k8sFieldNames["HorizontalPodAutoscaler.spec.metrics.resource.target"] = hpaMetricTargetFields
+	k8sFieldNames["HorizontalPodAutoscaler.spec.metrics.containerResource"] = map[int]string{1: "name", 2: "target", 3: "container"}
+	k8sFieldNames["HorizontalPodAutoscaler.spec.metrics.containerResource.target"] = hpaMetricTargetFields
+	k8sFieldNames["HorizontalPodAutoscaler.status.currentMetrics"] = hpaMetricStatusFields
+	k8sFieldNames["HorizontalPodAutoscaler.status.currentMetrics.resource"] = hpaResourceMetricStatusFields
+	k8sFieldNames["HorizontalPodAutoscaler.status.currentMetrics.resource.current"] = hpaMetricValueStatusFields
+	k8sFieldNames["HorizontalPodAutoscaler.status.currentMetrics.containerResource"] = map[int]string{1: "name", 2: "current", 3: "container"}
+	k8sFieldNames["HorizontalPodAutoscaler.status.currentMetrics.containerResource.current"] = hpaMetricValueStatusFields
+	k8sFieldNames["HorizontalPodAutoscaler.status.conditions"] = hpaConditionFields
+
+	// ValidatingAdmissionPolicy sub-paths
+	vapParamKindFields := map[int]string{1: "apiVersion", 2: "kind"}
+	vapMatchResourcesFields := map[int]string{1: "namespaceSelector", 2: "objectSelector", 3: "resourceRules", 4: "excludeResourceRules", 7: "matchPolicy"}
+	vapNamedRuleFields := map[int]string{1: "resourceNames", 2: "ruleWithOperations"}
+	vapRuleWithOpsFields := map[int]string{1: "operations", 2: "rule"}
+	vapRuleFields := map[int]string{1: "apiGroups", 2: "apiVersions", 3: "resources", 4: "scope"}
+	vapValidationFields := map[int]string{1: "expression", 2: "message", 3: "reason", 4: "messageExpression"}
+	vapAuditAnnotationFields := map[int]string{1: "key", 2: "valueExpression"}
+	vapMatchConditionFields := map[int]string{1: "name", 2: "expression"}
+	vapVariableFields := map[int]string{1: "name", 2: "expression"}
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.paramKind"] = vapParamKindFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints"] = vapMatchResourcesFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.namespaceSelector"] = labelSelectorFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.namespaceSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.objectSelector"] = labelSelectorFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.objectSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.resourceRules"] = vapNamedRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.resourceRules.ruleWithOperations"] = vapRuleWithOpsFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.resourceRules.ruleWithOperations.rule"] = vapRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.excludeResourceRules"] = vapNamedRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.excludeResourceRules.ruleWithOperations"] = vapRuleWithOpsFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConstraints.excludeResourceRules.ruleWithOperations.rule"] = vapRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.validations"] = vapValidationFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.auditAnnotations"] = vapAuditAnnotationFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.matchConditions"] = vapMatchConditionFields
+	k8sFieldNames["ValidatingAdmissionPolicy.spec.variables"] = vapVariableFields
+	k8sFieldNames["ValidatingAdmissionPolicy.status.conditions"] = metaConditionFields
+
+	// ValidatingAdmissionPolicyBinding sub-paths
+	vapbParamRefFields := map[int]string{1: "name", 2: "namespace", 3: "selector", 4: "parameterNotFoundAction"}
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.paramRef"] = vapbParamRefFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.paramRef.selector"] = labelSelectorFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.paramRef.selector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources"] = vapMatchResourcesFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.namespaceSelector"] = labelSelectorFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.namespaceSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.objectSelector"] = labelSelectorFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.objectSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.resourceRules"] = vapNamedRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.resourceRules.ruleWithOperations"] = vapRuleWithOpsFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.resourceRules.ruleWithOperations.rule"] = vapRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.excludeResourceRules"] = vapNamedRuleFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.excludeResourceRules.ruleWithOperations"] = vapRuleWithOpsFields
+	k8sFieldNames["ValidatingAdmissionPolicyBinding.spec.matchResources.excludeResourceRules.ruleWithOperations.rule"] = vapRuleFields
+
+	// OpenShift BuildConfig/Build common spec sub-paths
+	buildCommonSpecFields := map[int]string{1: "serviceAccount", 2: "source", 3: "revision", 4: "strategy", 5: "output", 6: "resources", 7: "postCommit", 8: "completionDeadlineSeconds", 9: "nodeSelector", 10: "mountTrustedCA"}
+	buildSourceFields := map[int]string{1: "type", 2: "binary", 3: "dockerfile", 4: "git", 5: "images", 6: "contextDir", 7: "sourceSecret", 8: "secrets", 9: "configMaps"}
+	buildOutputFields := map[int]string{1: "to", 2: "pushSecret", 3: "imageLabels"}
+	buildStrategyFields := map[int]string{1: "type", 2: "dockerStrategy", 3: "sourceStrategy", 4: "customStrategy", 5: "jenkinsPipelineStrategy"}
+	buildTriggerFields := map[int]string{1: "type", 2: "github", 3: "generic", 4: "imageChange", 5: "gitlab", 6: "bitbucket"}
+	buildImageChangeFields := map[int]string{1: "lastTriggeredImageID", 2: "from", 3: "paused"}
+	dcImageChangeFields := map[int]string{1: "automatic", 2: "containerNames", 3: "from", 4: "lastTriggeredImage"}
+	dcStrategyFields := map[int]string{1: "type", 2: "customParams", 3: "recreateParams", 4: "rollingParams", 5: "resources", 6: "labels", 7: "annotations", 8: "activeDeadlineSeconds"}
+	dcTriggerFields := map[int]string{1: "type", 2: "imageChangeParams"}
+
+	k8sFieldNames["BuildConfig.spec.commonSpec"] = buildCommonSpecFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.source"] = buildSourceFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.source.binary"] = map[int]string{1: "asFile"}
+	k8sFieldNames["BuildConfig.spec.commonSpec.source.git"] = map[int]string{1: "uri", 2: "ref"}
+	k8sFieldNames["BuildConfig.spec.commonSpec.strategy"] = buildStrategyFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.output"] = buildOutputFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.output.to"] = objectReferenceFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.output.pushSecret"] = imagePullSecretFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.postCommit"] = map[int]string{1: "command", 2: "args", 3: "script"}
+	k8sFieldNames["BuildConfig.spec.commonSpec.resources"] = resourceRequirementsFields
+	k8sFieldNames["BuildConfig.spec.commonSpec.source.sourceSecret"] = imagePullSecretFields
+	k8sFieldNames["BuildConfig.spec.triggers"] = buildTriggerFields
+	k8sFieldNames["BuildConfig.spec.triggers.imageChange"] = buildImageChangeFields
+	k8sFieldNames["BuildConfig.spec.triggers.imageChange.from"] = objectReferenceFields
+	sourceBuildStrategyFields := map[int]string{1: "from", 2: "pullSecret", 3: "env", 4: "scripts", 5: "incremental", 6: "forcePull", 9: "volumes"}
+	dockerBuildStrategyFields := map[int]string{1: "from", 2: "pullSecret", 3: "noCache", 4: "env", 5: "forcePull", 6: "dockerfilePath", 7: "buildArgs", 8: "imageOptimizationPolicy", 9: "volumes"}
+	customBuildStrategyFields := map[int]string{1: "from", 2: "pullSecret", 3: "env", 4: "exposeDockerSocket", 5: "forcePull", 6: "secrets", 7: "buildAPIVersion"}
+	gitSourceRevisionFields := map[int]string{1: "commit", 2: "author", 3: "committer", 4: "message"}
+	sourceRevisionFields := map[int]string{1: "type", 2: "git"}
+	buildTriggerCauseFields := map[int]string{1: "message", 2: "genericWebHook", 3: "githubWebHook", 4: "imageChangeBuild", 5: "gitlabWebHook", 6: "bitbucketWebHook"}
+	imageChangeCauseFields := map[int]string{1: "imageID", 2: "fromRef"}
+	buildStatusImageChangeTriggerFields := map[int]string{1: "lastTriggeredImageID", 2: "from", 3: "lastTriggerTime"}
+	stageInfoFields := map[int]string{1: "name", 2: "startTime", 3: "durationMilliseconds", 4: "steps"}
+	stepInfoFields := map[int]string{1: "name", 2: "startTime", 3: "durationMilliseconds"}
+	managedFieldEntryFields := map[int]string{1: "manager", 2: "operation", 3: "apiVersion", 4: "time", 6: "fieldsType", 7: "fieldsV1", 8: "subresource"}
+	for _, base := range []string{"BuildConfig.spec.commonSpec", "Build.spec.commonSpec"} {
+		k8sFieldNames[base+".strategy.sourceStrategy"] = sourceBuildStrategyFields
+		k8sFieldNames[base+".strategy.sourceStrategy.from"] = objectReferenceFields
+		k8sFieldNames[base+".strategy.sourceStrategy.pullSecret"] = imagePullSecretFields
+		k8sFieldNames[base+".strategy.sourceStrategy.env"] = envVarFields
+		k8sFieldNames[base+".strategy.dockerStrategy"] = dockerBuildStrategyFields
+		k8sFieldNames[base+".strategy.dockerStrategy.from"] = objectReferenceFields
+		k8sFieldNames[base+".strategy.dockerStrategy.pullSecret"] = imagePullSecretFields
+		k8sFieldNames[base+".strategy.dockerStrategy.env"] = envVarFields
+		k8sFieldNames[base+".strategy.dockerStrategy.buildArgs"] = envVarFields
+		k8sFieldNames[base+".strategy.customStrategy"] = customBuildStrategyFields
+		k8sFieldNames[base+".strategy.customStrategy.from"] = objectReferenceFields
+		k8sFieldNames[base+".strategy.customStrategy.pullSecret"] = imagePullSecretFields
+		k8sFieldNames[base+".strategy.customStrategy.env"] = envVarFields
+		k8sFieldNames[base+".revision"] = sourceRevisionFields
+		k8sFieldNames[base+".revision.git"] = gitSourceRevisionFields
+	}
+
+	k8sFieldNames["Build.spec.commonSpec"] = buildCommonSpecFields
+	k8sFieldNames["Build.spec.commonSpec.source"] = buildSourceFields
+	k8sFieldNames["Build.spec.commonSpec.source.binary"] = map[int]string{1: "asFile"}
+	k8sFieldNames["Build.spec.commonSpec.source.git"] = map[int]string{1: "uri", 2: "ref"}
+	k8sFieldNames["Build.spec.commonSpec.strategy"] = buildStrategyFields
+	k8sFieldNames["Build.spec.commonSpec.output"] = buildOutputFields
+	k8sFieldNames["Build.spec.commonSpec.output.to"] = objectReferenceFields
+	k8sFieldNames["Build.spec.commonSpec.output.pushSecret"] = imagePullSecretFields
+	k8sFieldNames["Build.spec.commonSpec.postCommit"] = map[int]string{1: "command", 2: "args", 3: "script"}
+	k8sFieldNames["Build.spec.commonSpec.resources"] = resourceRequirementsFields
+	k8sFieldNames["Build.spec.commonSpec.source.sourceSecret"] = imagePullSecretFields
+	k8sFieldNames["Build.spec.triggeredBy"] = buildTriggerCauseFields
+	k8sFieldNames["Build.spec.triggeredBy.imageChangeBuild"] = imageChangeCauseFields
+	k8sFieldNames["Build.spec.triggeredBy.imageChangeBuild.fromRef"] = objectReferenceFields
+	k8sFieldNames["Build.status.config"] = objectReferenceFields
+	k8sFieldNames["Build.status.conditions"] = metaConditionFields
+	k8sFieldNames["Build.status.stages"] = stageInfoFields
+	k8sFieldNames["Build.status.stages.steps"] = stepInfoFields
+	k8sFieldNames["BuildConfig.status.imageChangeTriggers"] = buildStatusImageChangeTriggerFields
+	k8sFieldNames["BuildConfig.status.imageChangeTriggers.from"] = objectReferenceFields
+
+	// OpenShift DeploymentConfig sub-paths
+	k8sFieldNames["DeploymentConfig.spec.strategy"] = dcStrategyFields
+	k8sFieldNames["DeploymentConfig.spec.strategy.recreateParams"] = map[int]string{1: "timeoutSeconds", 2: "pre", 3: "mid", 4: "post"}
+	k8sFieldNames["DeploymentConfig.spec.strategy.rollingParams"] = map[int]string{1: "updatePeriodSeconds", 2: "intervalSeconds", 3: "timeoutSeconds", 4: "maxUnavailable", 5: "maxSurge", 6: "pre", 7: "post"}
+	k8sFieldNames["DeploymentConfig.spec.triggers"] = dcTriggerFields
+	k8sFieldNames["DeploymentConfig.spec.triggers.imageChangeParams"] = dcImageChangeFields
+	k8sFieldNames["DeploymentConfig.spec.triggers.imageChangeParams.from"] = objectReferenceFields
+	k8sFieldNames["DeploymentConfig.status.conditions"] = metaConditionFields
+
+	k8sFieldNames["DeploymentConfig.spec.strategy.resources"] = resourceRequirementsFields
+
+	// OpenShift TemplateInstance sub-paths
+	k8sFieldNames["TemplateInstance.spec.template"] = map[int]string{1: "metadata", 2: "message", 3: "objects", 4: "parameters", 5: "labels"}
+	k8sFieldNames["TemplateInstance.spec.template.metadata"] = objectMetaFields
+	k8sFieldNames["TemplateInstance.spec.template.metadata.ownerReferences"] = map[int]string{1: "kind", 3: "name", 4: "uid", 5: "apiVersion", 6: "controller", 7: "blockOwnerDeletion"}
+	k8sFieldNames["TemplateInstance.spec.template.metadata.managedFields"] = managedFieldEntryFields
+	k8sFieldNames["TemplateInstance.spec.template.parameters"] = map[int]string{1: "name", 2: "displayName", 3: "description", 4: "value", 5: "generate", 6: "from", 7: "required"}
+	k8sFieldNames["TemplateInstance.spec.secret"] = imagePullSecretFields
+	k8sFieldNames["TemplateInstance.spec.requester"] = map[int]string{1: "username", 2: "uid", 3: "groups", 4: "extra"}
+	k8sFieldNames["TemplateInstance.status.conditions"] = metaConditionFields
+	k8sFieldNames["TemplateInstance.status.objects"] = map[int]string{1: "ref"}
+	k8sFieldNames["TemplateInstance.status.objects.ref"] = objectReferenceFields
 }
 
 func registerPodSpecChildren(base string) {
@@ -680,6 +1059,7 @@ func registerPodSpecChildren(base string) {
 		k8sFieldNames[c+".env"] = envVarFields
 		k8sFieldNames[c+".env.valueFrom"] = envVarSourceFields
 		k8sFieldNames[c+".env.valueFrom.fieldRef"] = fieldRefFields
+		k8sFieldNames[c+".env.valueFrom.resourceFieldRef"] = resourceFieldRefFields
 		k8sFieldNames[c+".env.valueFrom.configMapKeyRef"] = configMapKeyRefFields
 		k8sFieldNames[c+".env.valueFrom.secretKeyRef"] = secretKeyRefFields
 		k8sFieldNames[c+".volumeMounts"] = volumeMountFields
@@ -702,6 +1082,18 @@ func registerPodSpecChildren(base string) {
 		k8sFieldNames[c+".envFrom.configMapRef"] = configMapEnvSourceFields
 		k8sFieldNames[c+".envFrom.secretRef"] = secretEnvSourceFields
 		k8sFieldNames[c+".lifecycle"] = lifecycleFields
+		for _, hook := range []string{"postStart", "preStop"} {
+			h := c + ".lifecycle." + hook
+			k8sFieldNames[h] = lifecycleHandlerFields
+			k8sFieldNames[h+".exec"] = execActionFields
+			k8sFieldNames[h+".httpGet"] = httpGetFields
+			k8sFieldNames[h+".httpGet.port"] = intOrStringFields
+			k8sFieldNames[h+".tcpSocket"] = tcpSocketFields
+			k8sFieldNames[h+".tcpSocket.port"] = intOrStringFields
+			k8sFieldNames[h+".sleep"] = sleepActionFields
+		}
+		k8sFieldNames[c+".volumeDevices"] = volumeDeviceFields
+		k8sFieldNames[c+".resizePolicy"] = containerResizePolicyFields
 	}
 
 	v := base + ".volumes"
@@ -720,6 +1112,7 @@ func registerPodSpecChildren(base string) {
 	k8sFieldNames[v+".volumeSource.downwardAPI"] = downwardAPIVolumeSourceFields
 	k8sFieldNames[v+".volumeSource.downwardAPI.items"] = downwardAPIVolumeFileFields
 	k8sFieldNames[v+".volumeSource.downwardAPI.items.fieldRef"] = fieldRefFields
+	k8sFieldNames[v+".volumeSource.downwardAPI.items.resourceFieldRef"] = resourceFieldRefFields
 	k8sFieldNames[v+".volumeSource.projected.sources.configMap"] = configMapProjectionFields
 	k8sFieldNames[v+".volumeSource.projected.sources.configMap.items"] = keyToPathFields
 	k8sFieldNames[v+".volumeSource.projected.sources.secret"] = secretProjectionFields
@@ -727,6 +1120,7 @@ func registerPodSpecChildren(base string) {
 	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI"] = downwardAPIVolumeSourceFields
 	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI.items"] = downwardAPIVolumeFileFields
 	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI.items.fieldRef"] = fieldRefFields
+	k8sFieldNames[v+".volumeSource.projected.sources.downwardAPI.items.resourceFieldRef"] = resourceFieldRefFields
 
 	// Pod affinity/anti-affinity
 	for _, aField := range []string{"podAffinity", "podAntiAffinity"} {
@@ -760,6 +1154,11 @@ func registerPodSpecChildren(base string) {
 	k8sFieldNames[base+".topologySpreadConstraints"] = topologySpreadConstraintFields
 	k8sFieldNames[base+".topologySpreadConstraints.labelSelector"] = labelSelectorFields
 	k8sFieldNames[base+".topologySpreadConstraints.labelSelector.matchExpressions"] = matchExpressionsFields
+	k8sFieldNames[base+".dnsConfig"] = dnsConfigFields
+	k8sFieldNames[base+".dnsConfig.options"] = dnsConfigOptionFields
+	k8sFieldNames[base+".readinessGates"] = podReadinessGateFields
+	k8sFieldNames[base+".os"] = podOSFields
+	k8sFieldNames[base+".schedulingGates"] = podSchedulingGateFields
 }
 
 func registerContainerStatusPaths(statusBase string) {
@@ -999,17 +1398,23 @@ func parseObjectMeta(data []byte) map[string]interface{} {
 				continue
 			}
 			ref := make(map[string]interface{})
-			if v := protoString(orFields, 1); v != "" {
+			if v := protoString(orFields, 5); v != "" {
 				ref["apiVersion"] = v
 			}
-			if v := protoString(orFields, 3); v != "" {
+			if v := protoString(orFields, 1); v != "" {
 				ref["kind"] = v
 			}
-			if v := protoString(orFields, 4); v != "" {
+			if v := protoString(orFields, 3); v != "" {
 				ref["name"] = v
 			}
-			if v := protoString(orFields, 5); v != "" {
+			if v := protoString(orFields, 4); v != "" {
 				ref["uid"] = v
+			}
+			if f, ok := orFields[6]; ok && len(f) > 0 && f[0].WireType == 0 && f[0].Varint != 0 {
+				ref["controller"] = true
+			}
+			if f, ok := orFields[7]; ok && len(f) > 0 && f[0].WireType == 0 && f[0].Varint != 0 {
+				ref["blockOwnerDeletion"] = true
 			}
 			if len(ref) > 0 {
 				ownerRefs = append(ownerRefs, ref)
@@ -1070,6 +1475,11 @@ func decodeGenericField(f ProtoField, pathPrefix string, depth int) interface{} 
 		return f.Fixed32
 	}
 	return nil
+}
+
+var stringMapFields = map[string]bool{
+	"labels": true, "annotations": true, "nodeSelector": true,
+	"matchLabels": true, "selector": true, "parameters": true,
 }
 
 func isMapEntries(entries []ProtoField) bool {
@@ -1142,10 +1552,11 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 			}
 		}
 
-		childPath := pathPrefix
-		if key != fmt.Sprintf("field_%d", num) && pathPrefix != "" {
+		isUnnamed := key == fmt.Sprintf("field_%d", num)
+		childPath := ""
+		if !isUnnamed && pathPrefix != "" {
 			childPath = pathPrefix + "." + key
-		} else if key != fmt.Sprintf("field_%d", num) {
+		} else if !isUnnamed {
 			childPath = key
 		}
 
@@ -1154,19 +1565,31 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 			childNames = k8sFieldNames[childPath]
 		}
 
+		// A named field (from the parent's field map) with no registered child path
+		// is a leaf value (string/int/bytes), not a submessage. Prefer string
+		// interpretation to avoid "Available" being decoded as {field_8: ...}.
+		isNamedLeaf := names != nil && !isUnnamed && childNames == nil
+
 		if childNames == nil && isMapEntries(entries) {
 			m := make(map[string]interface{})
+			forceString := stringMapFields[key]
 			for _, e := range entries {
 				ef, _ := parseProtoMessage(e.Bytes)
 				k := protoString(ef, 1)
 				if k != "" && len(ef[2]) > 0 {
-					m[k] = decodeGenericField(ef[2][0], childPath, depth+1)
+					if forceString && ef[2][0].WireType == 2 {
+						m[k] = string(ef[2][0].Bytes)
+					} else {
+						m[k] = decodeGenericField(ef[2][0], childPath, depth+1)
+					}
 				}
 			}
 			result[key] = m
 		} else if len(entries) == 1 {
 			if entries[0].WireType == 2 && childNames != nil {
 				result[key] = decodeProtoFields(entries[0].Bytes, childNames, childPath, depth+1)
+			} else if entries[0].WireType == 2 && isNamedLeaf && isLikelyString(entries[0].Bytes) {
+				result[key] = string(entries[0].Bytes)
 			} else {
 				result[key] = decodeGenericField(entries[0], childPath, depth)
 			}
@@ -1175,6 +1598,8 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 			for _, e := range entries {
 				if e.WireType == 2 && childNames != nil {
 					vals = append(vals, decodeProtoFields(e.Bytes, childNames, childPath, depth+1))
+				} else if e.WireType == 2 && isNamedLeaf && isLikelyString(e.Bytes) {
+					vals = append(vals, string(e.Bytes))
 				} else {
 					vals = append(vals, decodeGenericField(e, childPath, depth))
 				}
@@ -1297,19 +1722,28 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 			sectionPath := kind + "." + key
 			sectionNames := k8sFieldNames[sectionPath]
 
+			isTopLeaf := topNames != nil && key != fmt.Sprintf("field_%d", fieldNum) && sectionNames == nil
+
 			if sectionNames == nil && isMapEntries(entries) {
 				m := make(map[string]interface{})
+				forceString := stringMapFields[key]
 				for _, e := range entries {
 					ef, _ := parseProtoMessage(e.Bytes)
 					k := protoString(ef, 1)
 					if k != "" && len(ef[2]) > 0 {
-						m[k] = decodeGenericField(ef[2][0], sectionPath, 1)
+						if forceString && ef[2][0].WireType == 2 {
+							m[k] = string(ef[2][0].Bytes)
+						} else {
+							m[k] = decodeGenericField(ef[2][0], sectionPath, 1)
+						}
 					}
 				}
 				result[key] = m
 			} else if len(entries) == 1 {
 				if entries[0].WireType == 2 && sectionNames != nil {
 					result[key] = decodeProtoFields(entries[0].Bytes, sectionNames, sectionPath, 0)
+				} else if entries[0].WireType == 2 && isTopLeaf && isLikelyString(entries[0].Bytes) {
+					result[key] = string(entries[0].Bytes)
 				} else {
 					result[key] = decodeGenericField(entries[0], sectionPath, 0)
 				}
@@ -1318,6 +1752,8 @@ func decodeK8sProtobuf(data []byte) (map[string]interface{}, error) {
 				for _, e := range entries {
 					if e.WireType == 2 && sectionNames != nil {
 						vals = append(vals, decodeProtoFields(e.Bytes, sectionNames, sectionPath, 0))
+					} else if e.WireType == 2 && isTopLeaf && isLikelyString(e.Bytes) {
+						vals = append(vals, string(e.Bytes))
 					} else {
 						vals = append(vals, decodeGenericField(e, sectionPath, 0))
 					}
@@ -1425,6 +1861,148 @@ func parseEtcdPath(path string) ParsedKey {
 	return result
 }
 
+var resourceShortNames = map[string]string{
+	"po":       "pods",
+	"pod":      "pods",
+	"svc":      "services",
+	"ep":       "endpoints",
+	"ns":       "namespaces",
+	"no":       "minions",
+	"node":     "minions",
+	"nodes":    "minions",
+	"cm":       "configmaps",
+	"configmap": "configmaps",
+	"sa":       "serviceaccounts",
+	"ds":       "daemonsets",
+	"deploy":   "deployments",
+	"deployment": "deployments",
+	"rs":       "replicasets",
+	"rc":       "replicationcontrollers",
+	"sts":      "statefulsets",
+	"statefulset": "statefulsets",
+	"job":      "jobs",
+	"cj":       "cronjobs",
+	"cronjob":  "cronjobs",
+	"pv":       "persistentvolumes",
+	"pvc":      "persistentvolumeclaims",
+	"sc":       "storageclasses",
+	"storageclass": "storageclasses",
+	"secret":   "secrets",
+	"ing":      "ingresses",
+	"ingress":  "ingresses",
+	"netpol":   "networkpolicies",
+	"pdb":      "poddisruptionbudgets",
+	"hpa":      "horizontalpodautoscalers",
+	"crd":      "apiextensions.k8s.io/customresourcedefinitions",
+	"crds":     "apiextensions.k8s.io/customresourcedefinitions",
+	"csr":      "certificatesigningrequests",
+	"cr":       "clusterroles",
+	"crb":      "clusterrolebindings",
+	"rb":       "rolebindings",
+	"role":     "roles",
+	"ev":       "events",
+	"event":    "events",
+	"quota":    "resourcequotas",
+	"limits":   "limitranges",
+	"lr":       "limitranges",
+	"pc":       "priorityclasses",
+}
+
+func resolveResourceFilter(dbPath, filter string) (string, error) {
+	if filter == "" {
+		return "", nil
+	}
+
+	// Expand kubectl-style short names
+	if expanded, ok := resourceShortNames[strings.ToLower(filter)]; ok {
+		filter = expanded
+	}
+
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
+	if err != nil {
+		return "", fmt.Errorf("failed to open database: %w", err)
+	}
+	defer db.Close()
+
+	allResources := make(map[string]bool)
+	db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("key"))
+		if bucket == nil {
+			return nil
+		}
+		return bucket.ForEach(func(key, value []byte) error {
+			path, _, err := parseEtcdV3Value(value)
+			if err != nil {
+				return nil
+			}
+			parsed := parseEtcdPath(path)
+			if parsed.Resource != "" {
+				allResources[parsed.Resource] = true
+			}
+			return nil
+		})
+	})
+
+	// Exact match
+	if allResources[filter] {
+		return filter, nil
+	}
+
+	filterLower := strings.ToLower(filter)
+
+	// Match against the resource name part (after the API group slash)
+	var matches []string
+	for r := range allResources {
+		name := r
+		if idx := strings.LastIndex(r, "/"); idx >= 0 {
+			name = r[idx+1:]
+		}
+		nameLower := strings.ToLower(name)
+		if nameLower == filterLower || nameLower == filterLower+"s" || nameLower == filterLower+"es" {
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 1 {
+		fmt.Fprintf(os.Stderr, "Matched resource: %s\n", matches[0])
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		sort.Strings(matches)
+		fmt.Fprintf(os.Stderr, "Ambiguous resource %q matches multiple types:\n", filter)
+		for _, m := range matches {
+			fmt.Fprintf(os.Stderr, "  %s\n", m)
+		}
+		return "", fmt.Errorf("use the full resource name with -r")
+	}
+
+	// Substring match
+	for r := range allResources {
+		name := r
+		if idx := strings.LastIndex(r, "/"); idx >= 0 {
+			name = r[idx+1:]
+		}
+		if strings.Contains(strings.ToLower(name), filterLower) {
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 1 {
+		fmt.Fprintf(os.Stderr, "Matched resource: %s\n", matches[0])
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		sort.Strings(matches)
+		fmt.Fprintf(os.Stderr, "Ambiguous resource %q matches multiple types:\n", filter)
+		for _, m := range matches {
+			fmt.Fprintf(os.Stderr, "  %s\n", m)
+		}
+		return "", fmt.Errorf("use the full resource name with -r")
+	}
+
+	return "", fmt.Errorf("resource %q not found in database. Use --list to see available resources", filter)
+}
+
 func extractObjects(dbPath, resourceFilter, namespaceFilter, nameFilter string, allNs bool) ([]ExtractedObject, error) {
 	db, err := bolt.Open(dbPath, 0600, &bolt.Options{ReadOnly: true})
 	if err != nil {
@@ -1432,6 +2010,8 @@ func extractObjects(dbPath, resourceFilter, namespaceFilter, nameFilter string, 
 	}
 	defer db.Close()
 
+	// Deduplicate by etcd path — keep the latest revision
+	seen := make(map[string]int)
 	var results []ExtractedObject
 
 	err = db.View(func(tx *bolt.Tx) error {
@@ -1476,13 +2056,20 @@ func extractObjects(dbPath, resourceFilter, namespaceFilter, nameFilter string, 
 				return nil
 			}
 
-			results = append(results, ExtractedObject{
+			entry := ExtractedObject{
 				Key:       parsed.FullPath,
 				Resource:  parsed.Resource,
 				Namespace: parsed.Namespace,
 				Name:      parsed.Name,
 				Object:    obj,
-			})
+			}
+
+			if idx, exists := seen[path]; exists {
+				results[idx] = entry
+			} else {
+				seen[path] = len(results)
+				results = append(results, entry)
+			}
 
 			return nil
 		})
@@ -1505,8 +2092,11 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 		Name      string
 	}
 
-	resources := make(map[string]*ResourceSummary)
-	var entries []ObjectEntry
+	// Track unique objects by path (etcd stores multiple revisions per key)
+	type pathInfo struct {
+		parsed ParsedKey
+	}
+	seenPaths := make(map[string]pathInfo)
 	listObjects := resourceFilter != ""
 
 	err = db.View(func(tx *bolt.Tx) error {
@@ -1534,25 +2124,30 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 				return nil
 			}
 
-			if _, exists := resources[parsed.Resource]; !exists {
-				resources[parsed.Resource] = &ResourceSummary{}
-			}
-
-			resources[parsed.Resource].Total++
-			if parsed.Namespace != "" {
-				resources[parsed.Resource].Namespaced = true
-			}
-
-			if listObjects {
-				entries = append(entries, ObjectEntry{
-					Namespace: parsed.Namespace,
-					Name:      parsed.Name,
-				})
-			}
+			seenPaths[path] = pathInfo{parsed: parsed}
 
 			return nil
 		})
 	})
+
+	resources := make(map[string]*ResourceSummary)
+	var entries []ObjectEntry
+	for _, info := range seenPaths {
+		parsed := info.parsed
+		if _, exists := resources[parsed.Resource]; !exists {
+			resources[parsed.Resource] = &ResourceSummary{}
+		}
+		resources[parsed.Resource].Total++
+		if parsed.Namespace != "" {
+			resources[parsed.Resource].Namespaced = true
+		}
+		if listObjects {
+			entries = append(entries, ObjectEntry{
+				Namespace: parsed.Namespace,
+				Name:      parsed.Name,
+			})
+		}
+	}
 
 	if err != nil {
 		return err
@@ -1610,8 +2205,19 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 		header = fmt.Sprintf("\nResources in namespace %q:", namespaceFilter)
 	}
 	fmt.Println(header)
-	fmt.Printf("%-30s %-20s %-10s\n", "Resource", "Type", "Count")
-	fmt.Println(strings.Repeat("-", 60))
+
+	maxLen := 30
+	for _, name := range resourceNames {
+		if len(name) > maxLen {
+			maxLen = len(name)
+		}
+	}
+	maxLen += 2
+
+	fmtStr := fmt.Sprintf("%%-%ds %%-20s %%-10s\n", maxLen)
+	fmtVal := fmt.Sprintf("%%-%ds %%-20s %%-10d\n", maxLen)
+	fmt.Printf(fmtStr, "RESOURCE (-r flag)", "SCOPE", "COUNT")
+	fmt.Println(strings.Repeat("-", maxLen+32))
 
 	for _, name := range resourceNames {
 		info := resources[name]
@@ -1619,7 +2225,7 @@ func listResources(dbPath, resourceFilter, namespaceFilter string) error {
 		if info.Namespaced {
 			scope = "namespaced"
 		}
-		fmt.Printf("%-30s %-20s %-10d\n", name, scope, info.Total)
+		fmt.Printf(fmtVal, name, scope, info.Total)
 	}
 
 	return nil
@@ -1787,8 +2393,8 @@ func (ws *webServer) handleResources(w http.ResponseWriter, r *http.Request) {
 			Count      int  `json:"count"`
 			Namespaced bool `json:"namespaced"`
 		}
-		resMap := make(map[string]*resSummary)
 
+		seenPaths := make(map[string]ParsedKey)
 		db.View(func(tx *bolt.Tx) error {
 			bucket := tx.Bucket([]byte("key"))
 			if bucket == nil {
@@ -1806,16 +2412,21 @@ func (ws *webServer) handleResources(w http.ResponseWriter, r *http.Request) {
 				if nsFilter != "" && parsed.Namespace != nsFilter {
 					return nil
 				}
-				if _, exists := resMap[parsed.Resource]; !exists {
-					resMap[parsed.Resource] = &resSummary{}
-				}
-				resMap[parsed.Resource].Count++
-				if parsed.Namespace != "" {
-					resMap[parsed.Resource].Namespaced = true
-				}
+				seenPaths[path] = parsed
 				return nil
 			})
 		})
+
+		resMap := make(map[string]*resSummary)
+		for _, parsed := range seenPaths {
+			if _, exists := resMap[parsed.Resource]; !exists {
+				resMap[parsed.Resource] = &resSummary{}
+			}
+			resMap[parsed.Resource].Count++
+			if parsed.Namespace != "" {
+				resMap[parsed.Resource].Namespaced = true
+			}
+		}
 
 		type resInfo struct {
 			Name       string `json:"name"`
@@ -1852,8 +2463,8 @@ func (ws *webServer) handleObjects(w http.ResponseWriter, r *http.Request) {
 			Namespace string `json:"namespace"`
 			Name      string `json:"name"`
 		}
-		var objects []objEntry
 
+		seenPaths := make(map[string]objEntry)
 		db.View(func(tx *bolt.Tx) error {
 			bucket := tx.Bucket([]byte("key"))
 			if bucket == nil {
@@ -1871,10 +2482,15 @@ func (ws *webServer) handleObjects(w http.ResponseWriter, r *http.Request) {
 				if nsFilter != "" && parsed.Namespace != nsFilter {
 					return nil
 				}
-				objects = append(objects, objEntry{Key: parsed.FullPath, Namespace: parsed.Namespace, Name: parsed.Name})
+				seenPaths[path] = objEntry{Key: parsed.FullPath, Namespace: parsed.Namespace, Name: parsed.Name}
 				return nil
 			})
 		})
+
+		var objects []objEntry
+		for _, entry := range seenPaths {
+			objects = append(objects, entry)
+		}
 
 		sort.Slice(objects, func(i, j int) bool {
 			if objects[i].Namespace != objects[j].Namespace {
@@ -2081,6 +2697,16 @@ func main() {
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: Database file not found: %s\n", dbPath)
 		os.Exit(1)
+	}
+
+	// Resolve partial resource names (e.g., "storagecluster" → "ocs.openshift.io/storageclusters")
+	if *resource != "" {
+		resolved, err := resolveResourceFilter(dbPath, *resource)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		*resource = resolved
 	}
 
 	// Handle list mode
