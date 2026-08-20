@@ -502,8 +502,22 @@ var k8sFieldNames = map[string]map[int]string{
 	"CronJob.status":               {1: "active", 4: "lastScheduleTime", 5: "lastSuccessfulTime"},
 	"CronJob.status.active":        objectReferenceFields,
 	"Ingress":                      {2: "spec", 3: "status"},
-	"Ingress.spec":                 {1: "ingressClassName", 2: "defaultBackend", 3: "tls", 4: "rules"},
+	"Ingress.spec":                 {1: "defaultBackend", 2: "tls", 3: "rules", 4: "ingressClassName"},
+	"Ingress.spec.defaultBackend":  {1: "serviceName", 2: "servicePort", 3: "resource", 4: "service"},
+	"Ingress.spec.defaultBackend.servicePort": {1: "type", 2: "intVal", 3: "strVal"},
+	"Ingress.spec.defaultBackend.service": {1: "name", 2: "port"},
+	"Ingress.spec.defaultBackend.service.port": {1: "name", 2: "number"},
+	"Ingress.spec.rules":           {1: "host", 2: "ingressRuleValue"},
+	"Ingress.spec.rules.ingressRuleValue": {1: "http"},
+	"Ingress.spec.rules.ingressRuleValue.http": {1: "paths"},
+	"Ingress.spec.rules.ingressRuleValue.http.paths": {1: "path", 2: "backend", 3: "pathType"},
+	"Ingress.spec.rules.ingressRuleValue.http.paths.backend": {1: "serviceName", 2: "servicePort", 3: "resource", 4: "service"},
+	"Ingress.spec.rules.ingressRuleValue.http.paths.backend.servicePort": {1: "type", 2: "intVal", 3: "strVal"},
+	"Ingress.spec.rules.ingressRuleValue.http.paths.backend.service": {1: "name", 2: "port"},
+	"Ingress.spec.rules.ingressRuleValue.http.paths.backend.service.port": {1: "name", 2: "number"},
 	"Ingress.status":               {1: "loadBalancer"},
+	"Ingress.status.loadBalancer":  {1: "ingress"},
+	"Ingress.status.loadBalancer.ingress": {1: "ip", 2: "hostname", 4: "ports"},
 	"ClusterRole":                  {2: "rules", 3: "aggregationRule"},
 	"ClusterRole.rules":            {1: "verbs", 2: "apiGroups", 3: "resources", 4: "resourceNames", 5: "nonResourceURLs"},
 	"ClusterRoleBinding":           {2: "subjects", 3: "roleRef"},
@@ -563,7 +577,7 @@ var k8sFieldNames = map[string]map[int]string{
 	"ServiceCIDR":                  {2: "spec", 3: "status"},
 	"ServiceCIDR.spec":             {1: "cidrs"},
 	"ServiceCIDR.status":           {1: "conditions"},
-	"NetworkPolicy":                {2: "spec"},
+	"NetworkPolicy":                {2: "spec", 3: "status"},
 	"NetworkPolicy.spec":           {1: "podSelector", 2: "ingress", 3: "egress", 4: "policyTypes"},
 	"NetworkPolicy.spec.podSelector": labelSelectorFields,
 	"NetworkPolicy.spec.ingress":   {1: "ports", 2: "from"},
@@ -625,6 +639,8 @@ var k8sFieldNames = map[string]map[int]string{
 
 	// OpenShift OAuthClient
 	"OAuthClient": {2: "secret", 3: "additionalSecrets", 4: "respondWithChallenges", 5: "redirectURIs", 6: "grantMethod", 7: "scopeRestrictions", 8: "accessTokenMaxAgeSeconds", 9: "accessTokenInactivityTimeoutSeconds"},
+	"OAuthAccessToken": {2: "clientName", 3: "expiresIn", 4: "scopes", 5: "redirectURI", 6: "userName", 7: "userUID", 8: "authorizeToken", 9: "refreshToken", 10: "inactivityTimeoutSeconds"},
+	"OAuthClientAuthorization": {2: "clientName", 3: "userName", 4: "userUID", 5: "scopes"},
 
 	// OpenShift Template
 	"Template": {2: "message", 3: "objects", 4: "parameters", 5: "labels"},
@@ -1477,6 +1493,10 @@ func decodeGenericField(f ProtoField, pathPrefix string, depth int) interface{} 
 	return nil
 }
 
+var repeatedWrapperPaths = map[string]bool{
+	"DeploymentConfig.spec.triggers": true,
+}
+
 var stringMapFields = map[string]bool{
 	"labels": true, "annotations": true, "nodeSelector": true,
 	"matchLabels": true, "selector": true, "parameters": true,
@@ -1540,6 +1560,31 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 	if len(fields) == 1 {
 		if f1, ok := fields[1]; ok && len(f1) == 1 && f1[0].WireType == 2 && isLikelyString(f1[0].Bytes) {
 			return string(f1[0].Bytes)
+		}
+	}
+
+	// Detect repeated message wrapper: Kubernetes encodes some repeated message
+	// fields by wrapping all elements under a single field tag in a container
+	// message. Each entry is a complete sub-message that should be decoded with
+	// the element's field names (which happen to be this level's names map).
+	if repeatedWrapperPaths[pathPrefix] && len(fields) == 1 {
+		for _, entries := range fields {
+			if len(entries) >= 2 {
+				var items []interface{}
+				for _, e := range entries {
+					if e.WireType != 2 {
+						continue
+					}
+					decoded := decodeProtoFields(e.Bytes, names, pathPrefix, depth+1)
+					if s, ok := decoded.(string); ok {
+						if name, hasName := names[1]; hasName {
+							decoded = map[string]interface{}{name: s}
+						}
+					}
+					items = append(items, decoded)
+				}
+				return items
+			}
 		}
 	}
 

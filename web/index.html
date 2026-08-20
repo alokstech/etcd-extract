@@ -30,22 +30,36 @@
                 Load a database to browse resources
             </div>
             <div id="sidebar-content" class="hidden">
-                <div class="sidebar-section">
-                    <h3 class="section-title">Cluster Scoped</h3>
-                    <ul id="cluster-resources" class="resource-list"></ul>
+                <div class="sidebar-search">
+                    <input type="text" id="resource-search" placeholder="Search resources..." autocomplete="off">
                 </div>
                 <div class="sidebar-section">
-                    <h3 class="section-title">Namespaced</h3>
-                    <div class="namespace-filter">
-                        <select id="namespace-select">
-                            <option value="">All Namespaces</option>
-                        </select>
+                    <h3 class="section-title collapsible" id="cluster-toggle">
+                        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+                        Cluster Scoped
+                        <span class="section-count" id="cluster-count"></span>
+                    </h3>
+                    <ul id="cluster-resources" class="resource-list collapsed"></ul>
+                </div>
+                <div class="sidebar-section">
+                    <h3 class="section-title collapsible" id="namespaced-toggle">
+                        <svg class="chevron" viewBox="0 0 16 16" fill="currentColor"><path d="M6 4l4 4-4 4"/></svg>
+                        Namespaced
+                        <span class="section-count" id="namespaced-count"></span>
+                    </h3>
+                    <div id="namespaced-content" class="collapsed">
+                        <div class="namespace-filter">
+                            <select id="namespace-select">
+                                <option value="">All Namespaces</option>
+                            </select>
+                        </div>
+                        <ul id="namespaced-resources" class="resource-list"></ul>
                     </div>
-                    <ul id="namespaced-resources" class="resource-list"></ul>
                 </div>
             </div>
         </aside>
 
+        <div class="resize-handle" id="resize-handle"></div>
         <main class="content">
             <div id="upload-view" class="upload-view">
                 <input type="file" id="file-input" hidden>
