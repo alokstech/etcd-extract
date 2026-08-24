@@ -1472,6 +1472,28 @@ func isLikelyString(data []byte) bool {
 	return true
 }
 
+// tryUnwrapInlineRef detects protobuf inline-embedded single-field messages
+// like LocalObjectReference (field 1 = name string) and returns the inner
+// string value. This prevents raw protobuf framing bytes from appearing as
+// \n prefixes in the YAML output.
+func tryUnwrapInlineRef(data []byte) (string, bool) {
+	if len(data) < 2 || data[0] != 0x0a {
+		return "", false
+	}
+	fields, err := parseProtoMessage(data)
+	if err != nil || len(fields) != 1 {
+		return "", false
+	}
+	entries, ok := fields[1]
+	if !ok || len(entries) != 1 || entries[0].WireType != 2 {
+		return "", false
+	}
+	if !isLikelyString(entries[0].Bytes) {
+		return "", false
+	}
+	return string(entries[0].Bytes), true
+}
+
 func decodeGenericField(f ProtoField, pathPrefix string, depth int) interface{} {
 	switch f.WireType {
 	case 0:
@@ -1633,8 +1655,14 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 		} else if len(entries) == 1 {
 			if entries[0].WireType == 2 && childNames != nil {
 				result[key] = decodeProtoFields(entries[0].Bytes, childNames, childPath, depth+1)
-			} else if entries[0].WireType == 2 && isNamedLeaf && isLikelyString(entries[0].Bytes) {
-				result[key] = string(entries[0].Bytes)
+			} else if entries[0].WireType == 2 && isNamedLeaf {
+				if s, ok := tryUnwrapInlineRef(entries[0].Bytes); ok {
+					result[key] = s
+				} else if isLikelyString(entries[0].Bytes) {
+					result[key] = string(entries[0].Bytes)
+				} else {
+					result[key] = decodeGenericField(entries[0], childPath, depth)
+				}
 			} else {
 				result[key] = decodeGenericField(entries[0], childPath, depth)
 			}
@@ -1643,8 +1671,14 @@ func decodeProtoFields(data []byte, names map[int]string, pathPrefix string, dep
 			for _, e := range entries {
 				if e.WireType == 2 && childNames != nil {
 					vals = append(vals, decodeProtoFields(e.Bytes, childNames, childPath, depth+1))
-				} else if e.WireType == 2 && isNamedLeaf && isLikelyString(e.Bytes) {
-					vals = append(vals, string(e.Bytes))
+				} else if e.WireType == 2 && isNamedLeaf {
+					if s, ok := tryUnwrapInlineRef(e.Bytes); ok {
+						vals = append(vals, s)
+					} else if isLikelyString(e.Bytes) {
+						vals = append(vals, string(e.Bytes))
+					} else {
+						vals = append(vals, decodeGenericField(e, childPath, depth))
+					}
 				} else {
 					vals = append(vals, decodeGenericField(e, childPath, depth))
 				}
