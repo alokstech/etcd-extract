@@ -1,92 +1,90 @@
 # etcd-extract
 
-A fast, lightweight command-line tool to extract Kubernetes object YAMLs from etcd database files.
+A fast, lightweight tool to extract and browse Kubernetes/OpenShift objects from etcd v3 database snapshots. Fully decodes protobuf-encoded objects into human-readable YAML — matching `kubectl get -o yaml` output style.
 
 ## Features
 
-- ✓ **Truly static binary** - Zero dependencies, copy and run anywhere
-- ✓ **Small size** - Only 2.7MB (vs 9.8MB Python version)
-- ✓ **Fast** - Written in Go using the official bbolt library (same as etcd)
-- ✓ **Native compatibility** - Uses the exact same BoltDB library as etcd
-- Extract specific Kubernetes objects from etcd database snapshots
-- Filter by resource type, namespace, and name
-- Automatically distinguishes between cluster-scoped and namespaced resources
+- **Full protobuf decoding** — Decodes all Kubernetes and OpenShift protobuf-encoded objects with correct field names (zero `field_N` entries)
+- **kubectl-identical YAML** — 2-space indentation and list style matching `kubectl get -o yaml`
+- **Web GUI** — Built-in browser-based interface for exploring resources with search, filtering, and namespace selection
+- **Truly static binary** — Zero dependencies, copy and run anywhere
+- **Cross-platform** — Linux, macOS, and Windows (amd64 and arm64)
+- **Fast** — Written in Go using the official bbolt library (same as etcd)
+- Filter by resource type, namespace, and object name
 - Output in YAML or JSON format
-- List all available resources in a database
 
-## Quick Start
+## Download
 
-### Option 1: Build Go Executable (Recommended - Fastest, Smallest, No Dependencies!)
+Download pre-built binaries from the [Releases](https://github.com/alokstech/etcd-extract/releases) page:
+
+| Platform | Architecture | File |
+|----------|-------------|------|
+| Linux | amd64 | `etcd-extract-vX.X.X-linux-amd64.tar.gz` |
+| Linux | arm64 | `etcd-extract-vX.X.X-linux-arm64.tar.gz` |
+| macOS | Intel | `etcd-extract-vX.X.X-macos-amd64.tar.gz` |
+| macOS | Apple Silicon | `etcd-extract-vX.X.X-macos-arm64.tar.gz` |
+| Windows | amd64 | `etcd-extract-vX.X.X-windows-amd64.zip` |
+| Windows | arm64 | `etcd-extract-vX.X.X-windows-arm64.zip` |
+
+```bash
+# Example: download and extract on Linux
+tar xzf etcd-extract-v1.1.1-linux-amd64.tar.gz
+sudo cp etcd-extract-v1.1.1-linux-amd64/etcd-extract /usr/local/bin/
+```
+
+## Build from Source
 
 ```bash
 # Build static binary
-./build-go.sh
-# or: make build
-```
+make build
+# or: ./build-go.sh
 
-Then use the standalone binary:
-```bash
+# Binary at dist/etcd-extract
 ./dist/etcd-extract --help
-
-# Copy anywhere and run (truly static, no dependencies!)
-sudo cp dist/etcd-extract /usr/local/bin/
 ```
 
-**Benefits:** 
-- ✓ Truly static (no glibc or any dependencies)
-- ✓ 2.7MB vs 9.8MB Python version (72% smaller)
-- ✓ 10-100x faster performance
-- ✓ Uses official bbolt library (same as etcd)
-- ✓ Copy to any Linux system and run
-
-### Option 2: Build Python Executable (Alternative)
-
-```bash
-./build-executable.sh
-```
-
-**Note:** Python version requires glibc and is dynamically linked.
-
-### Option 3: Run Python Script Directly
-
-```bash
-# Install dependencies once
-./install-deps.sh
-# or manually: pip install 'git+https://github.com/qingyunha/boltdb.git' PyYAML
-
-# Run the script
-./etcd_extract.py --help
-```
+Requires Go 1.21+.
 
 ## Usage
 
-### Basic Examples
+### Command-Line
 
-Extract all secrets from the `default` namespace:
 ```bash
-./etcd_extract.py --resource secrets --ns default /path/to/db.etcd
+# List all resource types in the database
+etcd-extract -l /path/to/snapshot.db
+
+# Extract all resources (YAML)
+etcd-extract -A /path/to/snapshot.db
+
+# Extract specific resource type
+etcd-extract -r secrets -A /path/to/snapshot.db
+
+# Filter by namespace
+etcd-extract -r pods -n kube-system /path/to/snapshot.db
+
+# Filter by name
+etcd-extract -r secrets -n default --name my-secret /path/to/snapshot.db
+
+# JSON output
+etcd-extract -r deployments -A -j /path/to/snapshot.db
 ```
 
-Extract a specific secret:
+### Web GUI
+
 ```bash
-./etcd_extract.py --resource secrets --ns kube-system --name my-secret /path/to/db.etcd
+# Launch web interface (opens browser automatically)
+etcd-extract -w /path/to/snapshot.db
+
+# Specify port
+etcd-extract -w -p 9090 /path/to/snapshot.db
 ```
 
-Extract cluster-scoped resources (no namespace):
-```bash
-./etcd_extract.py --resource namespaces /path/to/db.etcd
-./etcd_extract.py --resource nodes /path/to/db.etcd
-```
-
-Extract all secrets across all namespaces:
-```bash
-./etcd_extract.py --resource secrets --all-namespaces /path/to/db.etcd
-```
-
-List all available resources in the database:
-```bash
-./etcd_extract.py --list /path/to/db.etcd
-```
+The web GUI provides:
+- Sidebar with all resource types grouped by cluster-scoped and namespaced
+- Resizable sidebar for long resource names
+- Search bar to filter resources
+- Namespace filter dropdown
+- YAML/JSON toggle with copy and download buttons
 
 ### Command-Line Options
 
@@ -94,56 +92,40 @@ List all available resources in the database:
 positional arguments:
   db_file               Path to etcd database file
 
-optional arguments:
+options:
   -h, --help            Show help message
-  -r, --resource RESOURCE
-                        Resource type (e.g., secrets, configmaps, pods)
-  -n, --ns, --namespace NAMESPACE
-                        Namespace (for namespaced resources)
+  -r, --resource TYPE   Resource type (e.g., secrets, configmaps, pods)
+  -n, --namespace NS    Namespace (for namespaced resources)
   --name NAME           Object name
   -A, --all-namespaces  Extract from all namespaces
-  -o, --output {yaml,json}
-                        Output format (default: yaml)
+  -j, --json            Output in JSON format (default: YAML)
   -l, --list            List available resources in the database
+  -w, --web             Launch web GUI
+  -p, --port PORT       Web server port (default: 8080)
 ```
 
-## Resource Types
+## Supported Resource Types
 
-### Cluster-Scoped Resources
-These resources don't have a namespace:
-- `namespaces`
-- `nodes`
-- `persistentvolumes`
-- `clusterroles`
-- `clusterrolebindings`
-- `storageclasses`
-- `customresourcedefinitions`
+All standard Kubernetes and OpenShift resource types are decoded with full field name resolution:
 
-### Namespaced Resources
-These resources require a namespace:
-- `secrets`
-- `configmaps`
-- `pods`
-- `services`
-- `deployments`
-- `statefulsets`
-- `daemonsets`
-- And many more...
+**Kubernetes:** Pod, Deployment, StatefulSet, DaemonSet, ReplicaSet, Job, CronJob, Service, ConfigMap, Secret, Ingress, IngressClass, NetworkPolicy, Node, Namespace, PersistentVolume, PersistentVolumeClaim, ServiceAccount, Role, ClusterRole, RoleBinding, ClusterRoleBinding, HorizontalPodAutoscaler, PodDisruptionBudget, CertificateSigningRequest, StorageClass, and more.
+
+**OpenShift:** DeploymentConfig, BuildConfig, Build, Route, ImageStream, OAuthClient, OAuthAccessToken, OAuthClientAuthorization, Template, Identity, and more.
+
+**CRDs:** Custom Resource Definitions are decoded from their JSON representation automatically.
 
 ## How It Works
 
 1. Opens the etcd BoltDB database file in read-only mode
-2. Parses Kubernetes etcd key structure:
-   - Cluster-scoped: `/registry/<resource>/<name>`
-   - Namespaced: `/registry/<resource>/<namespace>/<name>`
-3. Filters objects based on your criteria
-4. Decodes and outputs as YAML or JSON
+2. Scans the `key` bucket for Kubernetes-prefixed entries
+3. Unwraps the `mvccpb.KeyValue` protobuf envelope
+4. Detects encoding: protobuf (`k8s\x00` prefix) or JSON
+5. For protobuf objects, recursively decodes using path-based field name lookup
+6. Outputs kubectl-style YAML or JSON
 
-## Notes
+## Security Note
 
-- The tool currently supports JSON-encoded objects in etcd
-- Protobuf-encoded objects will show a warning (requires additional protobuf definitions)
-- Always use read-only mode on production databases or work with snapshots
+etcd databases contain sensitive data including Secrets, credentials, and certificates. Run this tool locally and treat database files with the same security as cluster admin access.
 
 ## License
 
