@@ -66,7 +66,7 @@ etcd-extract -r pods -n kube-system /path/to/snapshot.db
 etcd-extract -r secrets -n default --name my-secret /path/to/snapshot.db
 
 # JSON output
-etcd-extract -r deployments -A -j /path/to/snapshot.db
+etcd-extract -r deployments -A -o json /path/to/snapshot.db
 ```
 
 ### Web GUI
@@ -98,7 +98,7 @@ options:
   -n, --namespace NS    Namespace (for namespaced resources)
   --name NAME           Object name
   -A, --all-namespaces  Extract from all namespaces
-  -j, --json            Output in JSON format (default: YAML)
+  -o, --output FORMAT   Output format: yaml or json (default: yaml)
   -l, --list            List available resources in the database
   -w, --web             Launch web GUI
   -p, --port PORT       Web server port (default: 8080)
