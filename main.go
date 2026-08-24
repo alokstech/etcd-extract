@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"embed"
 	"encoding/base64"
 	"encoding/binary"
@@ -21,7 +20,7 @@ import (
 	"unicode/utf8"
 
 	bolt "go.etcd.io/bbolt"
-	"gopkg.in/yaml.v3"
+	sigyaml "sigs.k8s.io/yaml"
 )
 
 var (
@@ -2576,12 +2575,8 @@ func (ws *webServer) handleObject(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(&yamlBuf, "# Namespace: %s\n", obj.Namespace)
 		}
 		fmt.Fprintf(&yamlBuf, "# Resource: %s\n# Name: %s\n---\n", obj.Resource, obj.Name)
-		var yamlBytes bytes.Buffer
-		enc := yaml.NewEncoder(&yamlBytes)
-		enc.SetIndent(2)
-		enc.Encode(obj.Object)
-		enc.Close()
-		yamlBuf.Write(yamlBytes.Bytes())
+		yamlData, _ := sigyaml.Marshal(obj.Object)
+		yamlBuf.Write(yamlData)
 
 		jsonData, _ := json.MarshalIndent(obj.Object, "", "  ")
 
@@ -2791,15 +2786,12 @@ func main() {
 			fmt.Printf("# Name: %s\n", result.Name)
 			fmt.Println("---")
 
-			var yamlBuf bytes.Buffer
-			enc := yaml.NewEncoder(&yamlBuf)
-			enc.SetIndent(2)
-			if err := enc.Encode(result.Object); err != nil {
+			yamlData, err := sigyaml.Marshal(result.Object)
+			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error marshaling YAML: %v\n", err)
 				continue
 			}
-			enc.Close()
-			fmt.Println(yamlBuf.String())
+			fmt.Println(string(yamlData))
 		} else {
 			jsonData, err := json.MarshalIndent(result, "", "  ")
 			if err != nil {
