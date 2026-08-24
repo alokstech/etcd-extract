@@ -47,36 +47,64 @@ Requires Go 1.21+.
 
 ## Usage
 
-### Command-Line
+### Listing Resources
 
 ```bash
 # List all resource types in the database
-etcd-extract -l /path/to/snapshot.db
+etcd-extract --list snapshot.db
 
-# Extract all resources (YAML)
-etcd-extract -A /path/to/snapshot.db
+# List resource types in a specific namespace
+etcd-extract --list --ns openshift-config snapshot.db
 
-# Extract specific resource type
-etcd-extract -r secrets -A /path/to/snapshot.db
+# List individual objects of a resource type
+etcd-extract --list --resource configmaps --ns openshift-config snapshot.db
 
-# Filter by namespace
-etcd-extract -r pods -n kube-system /path/to/snapshot.db
+# List all secrets across all namespaces
+etcd-extract --list --resource secrets snapshot.db
+```
 
-# Filter by name
-etcd-extract -r secrets -n default --name my-secret /path/to/snapshot.db
+### Extracting Resources (YAML)
 
-# JSON output
-etcd-extract -r deployments -A -o json /path/to/snapshot.db
+```bash
+# Extract a specific configmap by name
+etcd-extract -r configmaps -n openshift-config --name etcd-ca-bundle snapshot.db
+
+# Extract all configmaps in a namespace
+etcd-extract -r configmaps -n openshift-config snapshot.db
+
+# Extract all secrets across all namespaces
+etcd-extract -r secrets -A snapshot.db
+
+# Extract cluster-scoped resources (no namespace needed)
+etcd-extract -r namespaces snapshot.db
+etcd-extract -r nodes snapshot.db
+etcd-extract -r clusterroles snapshot.db
+
+# Extract all resources across all namespaces
+etcd-extract -A snapshot.db
+```
+
+### Extracting Resources (JSON)
+
+```bash
+# Extract a specific secret as JSON
+etcd-extract -r secrets -n kube-system --name my-secret -o json snapshot.db
+
+# Extract all deployments as JSON
+etcd-extract -r deployments -A -o json snapshot.db
 ```
 
 ### Web GUI
 
 ```bash
-# Launch web interface (opens browser automatically)
-etcd-extract -w /path/to/snapshot.db
+# Start web GUI with a database
+etcd-extract --serve snapshot.db
 
-# Specify port
-etcd-extract -w -p 9090 /path/to/snapshot.db
+# Start web GUI on a custom port
+etcd-extract --serve --port 9090 snapshot.db
+
+# Start web GUI without a database (load via browser upload)
+etcd-extract --serve
 ```
 
 The web GUI provides:
@@ -90,18 +118,18 @@ The web GUI provides:
 
 ```
 positional arguments:
-  db_file               Path to etcd database file
+  db_file                 Path to etcd database file
 
 options:
-  -h, --help            Show help message
-  -r, --resource TYPE   Resource type (e.g., secrets, configmaps, pods)
-  -n, --namespace NS    Namespace (for namespaced resources)
-  --name NAME           Object name
-  -A, --all-namespaces  Extract from all namespaces
-  -o, --output FORMAT   Output format: yaml or json (default: yaml)
-  -l, --list            List available resources in the database
-  -w, --web             Launch web GUI
-  -p, --port PORT       Web server port (default: 8080)
+  -h, --help              Show help message
+  -r, --resource TYPE     Resource type (e.g., secrets, configmaps, pods)
+  -n, --ns, --namespace   Namespace (for namespaced resources)
+  --name NAME             Object name
+  -A, --all-namespaces    Extract from all namespaces
+  -o, --output FORMAT     Output format: yaml or json (default: yaml)
+  -l, --list              List available resources in the database
+  --serve                 Start web GUI server
+  --port PORT             Web server port (default: 8080)
 ```
 
 ## Supported Resource Types
