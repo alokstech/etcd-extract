@@ -5,6 +5,7 @@ A fast, lightweight tool to extract and browse Kubernetes/OpenShift objects from
 ## Features
 
 - **Full protobuf decoding** — Decodes all Kubernetes and OpenShift protobuf-encoded objects with correct field names (zero `field_N` entries)
+- **Encryption-at-rest decryption** — Decrypts values encrypted with a Kubernetes `EncryptionConfiguration` (aescbc, aesgcm, secretbox) when you supply the config file
 - **kubectl-identical YAML** — 2-space indentation and list style matching `kubectl get -o yaml`
 - **Web GUI** — Built-in browser-based interface for exploring resources with search, filtering, and namespace selection
 - **Truly static binary** — Zero dependencies, copy and run anywhere
@@ -94,6 +95,25 @@ etcd-extract -r secrets -n kube-system --name my-secret -o json snapshot.db
 etcd-extract -r deployments -A -o json snapshot.db
 ```
 
+### Decrypting Encrypted Values (Encryption at Rest)
+
+If the cluster has [encryption at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/) enabled,
+affected values (typically Secrets) are stored in etcd with a `k8s:enc:<provider>:v1:<key>:` prefix and cannot be
+decoded without the encryption keys. Pass the same `EncryptionConfiguration` YAML the API server uses
+(`--encryption-provider-config`) and etcd-extract will decrypt them transparently:
+
+```bash
+# Extract and decrypt secrets using the cluster's encryption config
+etcd-extract -r secrets -A --encryption-config enc.yaml snapshot.db
+
+# Short form (-e), also works with --list and --serve
+etcd-extract -r secrets -n kube-system --name my-secret -e enc.yaml snapshot.db
+```
+
+Supported providers: **aescbc**, **aesgcm**, **secretbox**, and `identity` (passthrough). KMS providers are **not**
+supported offline — they require the external KMS plugin that holds the key. Values not covered by encryption are read
+normally, with or without the flag.
+
 ### Web GUI
 
 ```bash
@@ -128,6 +148,7 @@ options:
   -A, --all-namespaces    Extract from all namespaces
   -o, --output FORMAT     Output format: yaml or json (default: yaml)
   -l, --list              List available resources in the database
+  -e, --encryption-config Path to EncryptionConfiguration YAML for decrypting encrypted values
   --serve                 Start web GUI server
   --port PORT             Web server port (default: 8080)
 ```
@@ -147,9 +168,10 @@ All standard Kubernetes and OpenShift resource types are decoded with full field
 1. Opens the etcd BoltDB database file in read-only mode
 2. Scans the `key` bucket for Kubernetes-prefixed entries
 3. Unwraps the `mvccpb.KeyValue` protobuf envelope
-4. Detects encoding: protobuf (`k8s\x00` prefix) or JSON
-5. For protobuf objects, recursively decodes using path-based field name lookup
-6. Outputs kubectl-style YAML or JSON
+4. If the value is encrypted at rest (`k8s:enc:` prefix) and an `--encryption-config` was supplied, decrypts it using the matching key
+5. Detects encoding: protobuf (`k8s\x00` prefix) or JSON
+6. For protobuf objects, recursively decodes using path-based field name lookup
+7. Outputs kubectl-style YAML or JSON
 
 ## Security Note
 

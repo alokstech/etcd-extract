@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"embed"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -20,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	bolt "go.etcd.io/bbolt"
+	"golang.org/x/crypto/nacl/secretbox"
 	sigyaml "sigs.k8s.io/yaml"
 )
 
@@ -38,6 +43,8 @@ var (
 	listShort     = flag.Bool("l", false, "List available resources (short form)")
 	serve         = flag.Bool("serve", false, "Start web GUI server")
 	port          = flag.String("port", "8080", "Port for web server (used with --serve)")
+	encryptionConfig      = flag.String("encryption-config", "", "Path to Kubernetes EncryptionConfiguration YAML to decrypt encrypted values (aescbc/aesgcm/secretbox)")
+	encryptionConfigShort = flag.String("e", "", "Encryption config file (short form)")
 )
 
 //go:embed web
@@ -1865,6 +1872,13 @@ func parseEtcdV3Value(value []byte) (string, map[string]interface{}, error) {
 		return path, nil, fmt.Errorf("no object data found")
 	}
 
+	// Decrypt encryption-at-rest values (k8s:enc:...) when a config was provided.
+	// Non-encrypted values pass through unchanged.
+	objData, err = maybeDecrypt(path, objData)
+	if err != nil {
+		return path, nil, fmt.Errorf("failed to decrypt value: %w", err)
+	}
+
 	// Try JSON first
 	var obj map[string]interface{}
 	if json.Unmarshal(objData, &obj) == nil {
@@ -2716,6 +2730,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --resource namespaces db.etcd\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  # Extract as JSON instead of YAML\n")
 		fmt.Fprintf(os.Stderr, "  %s --resource configmaps --ns default --output json db.etcd\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Decrypt encryption-at-rest values with the cluster's EncryptionConfiguration\n")
+		fmt.Fprintf(os.Stderr, "  %s --resource secrets --all-namespaces --encryption-config enc.yaml db.etcd\n\n", os.Args[0])
 
 		fmt.Fprintf(os.Stderr, "  Web GUI:\n\n")
 		fmt.Fprintf(os.Stderr, "  # Start web GUI with a database\n")
@@ -2747,6 +2763,18 @@ func main() {
 	}
 	if *allNsShort {
 		*allNamespaces = true
+	}
+	if *encryptionConfigShort != "" {
+		*encryptionConfig = *encryptionConfigShort
+	}
+
+	// Load encryption keys if an EncryptionConfiguration was provided. This must
+	// happen before extraction or serving so parseEtcdV3Value can decrypt values.
+	if *encryptionConfig != "" {
+		if err := loadEncryptionConfig(*encryptionConfig); err != nil {
+			fmt.Fprintf(os.Stderr, "Error loading encryption config: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	// Handle serve mode
@@ -2837,4 +2865,219 @@ func main() {
 	}
 
 	fmt.Fprintf(os.Stderr, "\n# Extracted %d object(s)\n", len(results))
+}
+
+// Kubernetes encryption-at-rest (EncryptionConfiguration) support.
+//
+// When encryption at rest is enabled, the API server stores values in etcd with
+// a provider-specific prefix of the form:
+//
+//	k8s:enc:<provider>:v1:<keyname>:<ciphertext>
+//
+// This file loads the EncryptionConfiguration YAML (the same file passed to the
+// API server via --encryption-provider-config), builds a keyring, and decrypts
+// values transparently in parseEtcdV3Value. Supported providers: aescbc, aesgcm,
+// secretbox. KMS providers require the external KMS plugin and are not supported
+// offline.
+
+// encPrefix is the common prefix shared by every encrypted value.
+var encPrefix = []byte("k8s:enc:")
+
+// keyring maps "<provider>:<keyname>" to the raw (base64-decoded) key bytes.
+var keyring = map[string][]byte{}
+
+// --- EncryptionConfiguration parsing (decoded via YAML->JSON, so json tags) ---
+
+type providerKeys struct {
+	Keys []struct {
+		Name   string `json:"name"`
+		Secret string `json:"secret"`
+	} `json:"keys"`
+}
+
+type providersConfig struct {
+	AESCBC    *providerKeys `json:"aescbc"`
+	AESGCM    *providerKeys `json:"aesgcm"`
+	Secretbox *providerKeys `json:"secretbox"`
+	KMS       *struct {
+		Name string `json:"name"`
+	} `json:"kms"`
+	Identity *struct{} `json:"identity"`
+}
+
+type resourceConfig struct {
+	Resources []string          `json:"resources"`
+	Providers []providersConfig `json:"providers"`
+}
+
+type encryptionConfiguration struct {
+	Kind      string           `json:"kind"`
+	Resources []resourceConfig `json:"resources"`
+}
+
+// loadEncryptionConfig reads an EncryptionConfiguration YAML file and populates
+// the global keyring with every aescbc/aesgcm/secretbox key it contains.
+func loadEncryptionConfig(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var cfg encryptionConfiguration
+	if err := sigyaml.Unmarshal(data, &cfg); err != nil {
+		return fmt.Errorf("parsing encryption config: %w", err)
+	}
+
+	addKeys := func(provider string, pk *providerKeys) error {
+		if pk == nil {
+			return nil
+		}
+		for _, k := range pk.Keys {
+			raw, err := base64.StdEncoding.DecodeString(k.Secret)
+			if err != nil {
+				return fmt.Errorf("decoding key %q for provider %s: %w", k.Name, provider, err)
+			}
+			keyring[provider+":"+k.Name] = raw
+		}
+		return nil
+	}
+
+	for _, rc := range cfg.Resources {
+		for _, p := range rc.Providers {
+			if err := addKeys("aescbc", p.AESCBC); err != nil {
+				return err
+			}
+			if err := addKeys("aesgcm", p.AESGCM); err != nil {
+				return err
+			}
+			if err := addKeys("secretbox", p.Secretbox); err != nil {
+				return err
+			}
+		}
+	}
+
+	if len(keyring) == 0 {
+		return fmt.Errorf("no usable keys (aescbc/aesgcm/secretbox) found in encryption config")
+	}
+	return nil
+}
+
+// maybeDecrypt returns the plaintext for a stored etcd value. If the value is not
+// encrypted at rest (no k8s:enc: prefix) it is returned unchanged. The path is the
+// full etcd key, required as authenticated additional data for the aesgcm provider.
+func maybeDecrypt(path string, data []byte) ([]byte, error) {
+	if !bytes.HasPrefix(data, encPrefix) {
+		return data, nil // not encrypted
+	}
+	if len(keyring) == 0 {
+		return nil, errors.New("value is encrypted at rest; pass --encryption-config <file> to decrypt it")
+	}
+
+	// Prefix layout: k8s:enc:<provider>:v1:<keyname>:<ciphertext>
+	// Split into at most 4 parts so the ciphertext (which may contain ':' bytes)
+	// is kept intact as the final element.
+	rest := data[len(encPrefix):]
+	parts := bytes.SplitN(rest, []byte(":"), 4)
+	if len(parts) < 4 {
+		return nil, errors.New("malformed encryption prefix")
+	}
+	provider := string(parts[0])
+	keyName := string(parts[2]) // parts[1] is the version (v1)
+	ciphertext := parts[3]
+
+	if provider == "kms" {
+		return nil, errors.New("KMS-encrypted values require the external KMS plugin and cannot be decrypted offline")
+	}
+
+	key, ok := keyring[provider+":"+keyName]
+	if !ok {
+		return nil, fmt.Errorf("no key named %q for provider %q in encryption config", keyName, provider)
+	}
+
+	switch provider {
+	case "aescbc":
+		return decryptAESCBC(key, ciphertext)
+	case "aesgcm":
+		return decryptAESGCM(key, []byte(path), ciphertext)
+	case "secretbox":
+		return decryptSecretbox(key, ciphertext)
+	default:
+		return nil, fmt.Errorf("unsupported encryption provider %q", provider)
+	}
+}
+
+// decryptAESCBC decrypts an aescbc value: a 16-byte IV followed by CBC ciphertext
+// with PKCS#7 padding.
+func decryptAESCBC(key, data []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	bs := block.BlockSize()
+	if len(data) < bs {
+		return nil, errors.New("aescbc: ciphertext shorter than IV")
+	}
+	iv := data[:bs]
+	ct := data[bs:]
+	if len(ct) == 0 || len(ct)%bs != 0 {
+		return nil, errors.New("aescbc: ciphertext is not a multiple of the block size")
+	}
+	plain := make([]byte, len(ct))
+	cipher.NewCBCDecrypter(block, iv).CryptBlocks(plain, ct)
+	return pkcs7Unpad(plain, bs)
+}
+
+// decryptAESGCM decrypts an aesgcm value: a 12-byte nonce followed by the GCM
+// ciphertext and tag. aad is the etcd key, used as authenticated additional data.
+func decryptAESGCM(key, aad, data []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	ns := gcm.NonceSize()
+	if len(data) < ns {
+		return nil, errors.New("aesgcm: ciphertext shorter than nonce")
+	}
+	return gcm.Open(nil, data[:ns], data[ns:], aad)
+}
+
+// decryptSecretbox decrypts a secretbox value: a 24-byte nonce followed by the
+// NaCl secretbox sealed message. The key must be 32 bytes.
+func decryptSecretbox(key, data []byte) ([]byte, error) {
+	if len(key) != 32 {
+		return nil, fmt.Errorf("secretbox: key must be 32 bytes, got %d", len(key))
+	}
+	if len(data) < 24 {
+		return nil, errors.New("secretbox: ciphertext shorter than nonce")
+	}
+	var nonce [24]byte
+	copy(nonce[:], data[:24])
+	var k [32]byte
+	copy(k[:], key)
+	out, ok := secretbox.Open(nil, data[24:], &nonce, &k)
+	if !ok {
+		return nil, errors.New("secretbox: decryption failed (wrong key?)")
+	}
+	return out, nil
+}
+
+// pkcs7Unpad removes PKCS#7 padding from a decrypted CBC plaintext.
+func pkcs7Unpad(data []byte, blockSize int) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, errors.New("pkcs7: empty plaintext")
+	}
+	pad := int(data[len(data)-1])
+	if pad == 0 || pad > blockSize || pad > len(data) {
+		return nil, errors.New("pkcs7: invalid padding")
+	}
+	for _, b := range data[len(data)-pad:] {
+		if int(b) != pad {
+			return nil, errors.New("pkcs7: invalid padding")
+		}
+	}
+	return data[:len(data)-pad], nil
 }
